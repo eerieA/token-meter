@@ -1,0 +1,50 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Build / packaging outputs
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# PyInstaller / frozen apps
+*.spec
+
+# IDE / editor files
+.vscode/
+.idea/
+*.iml
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs / runtime artifacts
+*.log
+
+# Local environment / secrets
+.env
+.env.*
+.envrc
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Qt / UI artifacts
+*.qmlc
+*.jsc
+
+# Local data files
+data/
+cache/

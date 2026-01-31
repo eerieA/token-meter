@@ -1,0 +1,7 @@
+[project]
+name = "token-meter"
+version = "0.1.0"
+dependencies = ["PySide6", "requests", "python-dotenv"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
