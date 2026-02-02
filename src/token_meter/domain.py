@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
+
 
 @dataclass
 class UsageRecord:
@@ -7,6 +9,6 @@ class UsageRecord:
     timestamp: datetime
     tokens_input: int | None
     tokens_output: int | None
-    cost_usd: float
+    # Decimal for monetary amounts to avoid float rounding issues
+    cost_usd: Decimal
     model: str | None = None
-

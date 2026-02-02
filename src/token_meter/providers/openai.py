@@ -1,5 +1,6 @@
 import requests
 from datetime import datetime, timezone
+from decimal import Decimal
 from token_meter.domain import UsageRecord
 
 OPENAI_API_BASE = "https://api.openai.com/v1"
@@ -90,7 +91,10 @@ class OpenAIProvider:
             ts = datetime.fromtimestamp(bucket_start, tz=timezone.utc)
 
             for result in bucket.get("results", []):
+                # The API returns amounts as strings or numbers. Use Decimal for money
                 amount = result["amount"]["value"]
+
+                amount_dec = Decimal(str(amount))
 
                 records.append(
                     UsageRecord(
@@ -98,7 +102,7 @@ class OpenAIProvider:
                         timestamp=ts,
                         tokens_input=None,
                         tokens_output=None,
-                        cost_usd=float(amount),
+                        cost_usd=amount_dec,
                         model=None,  # cost endpoint is model-agnostic
                     )
                 )
