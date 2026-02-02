@@ -42,12 +42,12 @@ class UsageTray:
         self.tray.show()
 
         # Debug: balloon to confirm the tray icon is active
-        try:
+        """ try:
             self.tray.showMessage(
                 "Token Meter", "Started", QSystemTrayIcon.MessageIcon.Information, 3000
             )
         except Exception:
-            pass
+            pass """
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.refresh)

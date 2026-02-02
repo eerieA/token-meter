@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from token_meter.providers.openai import OpenAIProvider
 from token_meter.storage import load_cache, save_cache, cache_valid
 
@@ -10,13 +10,13 @@ class UsageAggregator:
     def fetch(self):
         cache = load_cache()
         # fetched_at should be an ISO string to be json serializable
-        now_dt = datetime.utcnow()
+        now_dt = datetime.now(timezone.utc)
         fetched_at = now_dt.isoformat()
 
         if "openai" in cache and cache_valid(cache["openai"]["fetched_at"], 300):
             return cache["openai"]["data"]
 
-        # Fetch costs for the start of the current month
+        # Start of current month in UTC
         start_of_month = now_dt.replace(
             day=1, hour=0, minute=0, second=0, microsecond=0
         )
