@@ -1,4 +1,5 @@
 from pathlib import Path
+import traceback
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
@@ -58,5 +59,10 @@ class UsageTray:
         try:
             total = self.aggregator.fetch()
             self.status.setText(f"OpenAI today: ${total:.2f}")
-        except Exception:
-            self.status.setText("Usage fetch failed")
+        except Exception as e:
+            # Print full traceback to console for debugging
+            tb = traceback.format_exc()
+            print(tb)
+            # Show a short message in the menu but point user to the console
+            self.status.setText("Usage fetch failed (see console)")
+
