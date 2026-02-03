@@ -5,7 +5,8 @@ import requests
 from datetime import datetime, timezone
 from decimal import Decimal
 from token_meter.domain import UsageRecord
-from token_meter.logging_config import get_logger
+from token_meter.logger import get_logger
+
 
 OPENAI_API_BASE = "https://api.openai.com/v1"
 

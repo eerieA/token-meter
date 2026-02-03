@@ -5,9 +5,10 @@ from token_meter.ui.tray import UsageTray
 from token_meter.aggregator import UsageAggregator
 from token_meter.keystore import load_api_key, save_api_key
 from token_meter.ui.key_dialog import KeyEntryDialog
-from token_meter.logging_config import get_logger
+from token_meter.logger import get_logger
 
 logger = get_logger(__name__)
+
 
 # Module-level reference to the tray object. This is REQUIRED to keep the QSystemTrayIcon alive.
 # And add it in global (module scope) to avoid static-typing warnings

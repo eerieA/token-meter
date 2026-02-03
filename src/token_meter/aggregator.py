@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from token_meter.providers.openai import OpenAIProvider, OpenAIProviderError
 from token_meter.storage import load_cache, save_cache, cache_valid
-from token_meter.logging_config import get_logger
+from token_meter.logger import get_logger
 
 logger = get_logger(__name__)
 

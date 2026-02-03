@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 from typing import Optional
-from token_meter.logging_config import get_logger
+from token_meter.logger import get_logger
 
 logger = get_logger(__name__)
 
