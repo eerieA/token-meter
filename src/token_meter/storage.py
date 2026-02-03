@@ -2,19 +2,34 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from token_meter.domain import UsageRecord
+from token_meter.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 CACHE_PATH = Path.home() / ".cache" / "ai_usage.json"
 
 
 def load_cache() -> dict:
-    if not CACHE_PATH.exists():
+    try:
+        if not CACHE_PATH.exists():
+            logger.info("Cache file does not exist: %s", CACHE_PATH)
+            return {}
+        text = CACHE_PATH.read_text()
+        data = json.loads(text)
+        logger.info("Loaded cache from %s", CACHE_PATH)
+        return data
+    except Exception as e:
+        logger.exception("Failed to load cache: %s", e)
         return {}
-    return json.loads(CACHE_PATH.read_text())
 
 
 def save_cache(data: dict):
-    CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CACHE_PATH.write_text(json.dumps(data))
+    try:
+        CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CACHE_PATH.write_text(json.dumps(data))
+        logger.info("Saved cache to %s", CACHE_PATH)
+    except Exception as e:
+        logger.exception("Failed to write cache to %s: %s", CACHE_PATH, e)
 
 
 def cache_valid(last_fetch: str, ttl_seconds: int) -> bool:

@@ -1,9 +1,28 @@
+import time
+from typing import Any
+
 import requests
 from datetime import datetime, timezone
 from decimal import Decimal
 from token_meter.domain import UsageRecord
+from token_meter.logging_config import get_logger
 
 OPENAI_API_BASE = "https://api.openai.com/v1"
+
+# Retry configuration
+_MAX_RETRIES = 3
+_BACKOFF_FACTOR = 1  # base seconds
+
+logger = get_logger(__name__)
+
+
+class OpenAIProviderError(Exception):
+    def __init__(
+        self, message: str, status: int | None = None, body: str | None = None
+    ):
+        super().__init__(message)
+        self.status = status
+        self.body = body
 
 
 class OpenAIProvider:
@@ -29,7 +48,7 @@ class OpenAIProvider:
             "Content-Type": "application/json",
         }
 
-        params = {
+        params: dict[str, Any] = {
             "start_time": start_time,
             "bucket_width": "1d",
             "limit": 180,
@@ -43,14 +62,9 @@ class OpenAIProvider:
 
         # If paginate is False, do a single request and return the first page
         if not paginate:
-            r = requests.get(
-                f"{OPENAI_API_BASE}/organization/costs",
-                headers=headers,
-                params=params,
-                timeout=15,
+            payload = self._do_get(
+                f"{OPENAI_API_BASE}/organization/costs", headers, params
             )
-            r.raise_for_status()
-            payload = r.json()
             return self._normalize_costs(payload)
 
         # Otherwise iterate through pages
@@ -61,15 +75,9 @@ class OpenAIProvider:
             if page:
                 params["page"] = page
 
-            r = requests.get(
-                f"{OPENAI_API_BASE}/organization/costs",
-                headers=headers,
-                params=params,
-                timeout=15,
+            payload = self._do_get(
+                f"{OPENAI_API_BASE}/organization/costs", headers, params
             )
-            r.raise_for_status()
-
-            payload = r.json()
             records.extend(self._normalize_costs(payload))
 
             if not payload.get("has_more"):
@@ -78,6 +86,74 @@ class OpenAIProvider:
             page = payload.get("next_page")
 
         return records
+
+    def _do_get(self, url: str, headers: dict, params: dict) -> dict:
+        """Perform a GET with retries and exponential backoff.
+
+        Raises OpenAIProviderError for non-retriable HTTP errors or on final failure.
+        """
+        for attempt in range(1, _MAX_RETRIES + 1):
+            try:
+                logger.info(
+                    "Requesting %s (attempt=%d) params=%s", url, attempt, params
+                )
+                r = requests.get(url, headers=headers, params=params, timeout=15)
+            except requests.RequestException as e:
+                # Network-level error
+                logger.warning("Network error on attempt %d: %s", attempt, e)
+                if attempt < _MAX_RETRIES:
+                    backoff = _BACKOFF_FACTOR * (2 ** (attempt - 1))
+                    logger.info("Sleeping for %s seconds before retry", backoff)
+                    time.sleep(backoff)
+                    continue
+                raise OpenAIProviderError(
+                    "Network error while requesting OpenAI", None, str(e)
+                ) from e
+
+            # Got a response; handle status codes
+            status = r.status_code
+            body = None
+            try:
+                body = r.text
+            except Exception:
+                body = "<unavailable>"
+
+            if status >= 400:
+                # Treat 429 and 5xx as transient
+                if status == 429 or status >= 500:
+                    logger.warning(
+                        "Transient HTTP error %s on attempt %d: %s",
+                        status,
+                        attempt,
+                        body,
+                    )
+                    if attempt < _MAX_RETRIES:
+                        backoff = _BACKOFF_FACTOR * (2 ** (attempt - 1))
+                        logger.info("Sleeping for %s seconds before retry", backoff)
+                        time.sleep(backoff)
+                        continue
+                    raise OpenAIProviderError(f"HTTP error {status}", status, body)
+                else:
+                    # Other 4xx errors are considered permanent
+                    logger.error("Non-retriable HTTP error %s: %s", status, body)
+                    raise OpenAIProviderError(f"HTTP error {status}", status, body)
+
+            # OK
+            try:
+                payload = r.json()
+            except Exception as e:
+                logger.error("Failed to parse JSON response: %s", e)
+                raise OpenAIProviderError("Invalid JSON response", status, body) from e
+
+            logger.info(
+                "Received page: has_more=%s, entries=%d",
+                payload.get("has_more"),
+                len(payload.get("data", [])),
+            )
+            return payload
+
+        # Shouldn't reach here
+        raise OpenAIProviderError("Exceeded retries when requesting OpenAI")
 
     def _normalize_costs(self, payload) -> list[UsageRecord]:
         """
