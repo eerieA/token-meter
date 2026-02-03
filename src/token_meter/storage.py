@@ -6,7 +6,7 @@ from token_meter.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-CACHE_PATH = Path.home() / ".cache" / "ai_usage.json"
+CACHE_PATH = Path.home() / ".token-meter" / "api_usage.json"
 
 
 def load_cache() -> dict:

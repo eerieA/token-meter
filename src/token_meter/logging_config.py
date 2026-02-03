@@ -2,7 +2,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-LOG_PATH = Path.home() / ".cache" / "token_meter.log"
+LOG_PATH = Path.home() / ".token-meter" / "token_meter.log"
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # Basic formatter

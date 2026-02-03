@@ -6,14 +6,14 @@ from token_meter.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-CONFIG_DIR = Path.home() / ".config" / "token_meter"
+CONFIG_DIR = Path.home() / ".token-meter"
 CRED_PATH = CONFIG_DIR / "credentials.json"
 
 
 def save_api_key(api_key: str) -> None:
     """Save the API key to a local credentials file with restrictive permissions.
 
-    The key is stored in plaintext JSON in ~/.config/token_meter/credentials.json with
+    The key is stored in plaintext JSON in ~/.token_meter/credentials.json with
     an attempt to set file mode to 0o600 where supported. This is intentionally simple
     local storage (no OS keychain).
     """
