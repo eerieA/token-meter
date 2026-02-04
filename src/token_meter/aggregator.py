@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-from token_meter.providers.openai import OpenAIProvider, OpenAIProviderError
+from token_meter.providers.openai import AsyncOpenAIProvider, OpenAIProviderError
 from token_meter.storage import load_cache, save_cache, cache_valid
 from token_meter.logger import get_logger
 
@@ -9,9 +9,9 @@ logger = get_logger(__name__)
 
 class UsageAggregator:
     def __init__(self, openai_key: str):
-        self.openai = OpenAIProvider(openai_key)
+        self.openai = AsyncOpenAIProvider(openai_key)
 
-    def fetch(self):
+    async def fetch(self) -> Decimal:
         cache = load_cache()
         # fetched_at should be an ISO string to be json serializable
         now_dt = datetime.now(timezone.utc)
@@ -36,7 +36,7 @@ class UsageAggregator:
         logger.info("Fetching costs from OpenAI starting at %s", start_time)
 
         try:
-            records = self.openai.fetch_costs(start_time, paginate=True)
+            records = await self.openai.fetch_costs(start_time, paginate=True)
         except OpenAIProviderError as e:
             logger.exception(
                 "Failed to fetch costs: %s (status=%s)", e, getattr(e, "status", None)

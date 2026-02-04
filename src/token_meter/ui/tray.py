@@ -1,5 +1,6 @@
 from pathlib import Path
 import traceback
+import asyncio
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
@@ -12,6 +13,7 @@ class UsageTray:
         # Debug: whether system tray is available on this platform
         print("Tray available:", QSystemTrayIcon.isSystemTrayAvailable())
         self.aggregator = aggregator
+        self._refresh_task: asyncio.Task | None = None
 
         # Try to load an icon file from resources; fallback to a generated icon
         icon_path = RES_DIR / "icon.png"
@@ -53,16 +55,44 @@ class UsageTray:
         self.timer.timeout.connect(self.refresh)
         self.timer.start(5 * 60 * 1000)
 
+        # Schedule initial refresh
         self.refresh()
 
     def refresh(self):
+        """Start a non-blocking refresh. If the aggregator.fetch is async it will
+        be scheduled on the asyncio event loop; otherwise we call it synchronously.
+        """
+        # If a previous refresh task is running, don't start another
+        if self._refresh_task and not self._refresh_task.done():
+            return
+
         try:
-            total = self.aggregator.fetch()
-            self.status.setText(f"OpenAI today: ${total:.2f}")
-        except Exception as e:
-            # Print full traceback to console for debugging
+            result = self.aggregator.fetch()
+            # If fetch() returned a coroutine, schedule it on the asyncio loop
+            if asyncio.iscoroutine(result):
+                loop = asyncio.get_event_loop()
+                self._refresh_task = loop.create_task(self._refresh_async(result))
+            else:
+                # Synchronous value
+                total = result
+                self.status.setText(f"OpenAI today: ${total:.2f}")
+        except Exception:
             tb = traceback.format_exc()
             print(tb)
-            # Show a short message in the menu but point user to the console
             self.status.setText("Usage fetch failed (see console)")
 
+    async def _refresh_async(self, coro):
+        try:
+            total = await coro
+            # total is a Decimal, format to two decimals
+            try:
+                self.status.setText(f"OpenAI today: ${total:.2f}")
+            except Exception:
+                # Fallback: cast to float for display
+                self.status.setText(f"OpenAI today: ${float(total):.2f}")
+        except Exception:
+            tb = traceback.format_exc()
+            print(tb)
+            self.status.setText("Usage fetch failed (see console)")
+        finally:
+            self._refresh_task = None

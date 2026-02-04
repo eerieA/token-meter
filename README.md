@@ -122,13 +122,13 @@ This will:
 
 ## Activating the Poetry environment
 
-Option 1 — spawn a Poetry shell:
+Option 1: spawn a Poetry shell:
 
 ```bash
 poetry shell
 ```
 
-Option 2 — run commands inside the environment without activating it:
+Option 2: run commands inside the environment without activating it:
 
 ```bash
 poetry run python -m token_meter.main

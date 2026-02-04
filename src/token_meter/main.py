@@ -1,6 +1,8 @@
 import sys
 import os
+import asyncio
 from PySide6.QtWidgets import QApplication, QDialog
+from qasync import QEventLoop
 from token_meter.ui.tray import UsageTray
 from token_meter.aggregator import UsageAggregator
 from token_meter.keystore import load_api_key, save_api_key
@@ -23,6 +25,10 @@ def main():
 
     # This is a tray-only application no open windows.
     app.setQuitOnLastWindowClosed(False)
+
+        # Run the qasync event loop (integrates asyncio with the Qt event loop).
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
 
     # Try environment, then local keystore
     openai_key = os.environ.get("OPENAI_API_KEY") or load_api_key()
@@ -49,9 +55,16 @@ def main():
 
     _tray = UsageTray(aggregator)
 
-    # Enter the Qt event loop. This call blocks until the user selects "Quit" from the tray menu.
-    sys.exit(app.exec())
+    try:
+        with loop:
+            # The tray's constructor schedules an initial refresh; start the loop and
+            # keep running until the application quits (e.g., user selects Quit).
+            loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+
 
 
 if __name__ == "__main__":
     main()
+
