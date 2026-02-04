@@ -18,38 +18,148 @@ Obtain cost data from provider's endpoint and display it in some GUI.
   - Reads API key from OPENAI_API_KEY env var or from a local keystore (~/.config/token_meter/credentials.json).
   - If missing, prompts the user in a modal dialog and can save the key locally (file saved with an attempted 0o600 chmod and logged).
 
-# Local test steps
 
-Activate venv.
+## Local test steps
+
+This project uses **Poetry** for dependency management. Do **not** manually activate a virtual environment.
+
+### Install dependencies
+
+From the project root, install all dependencies into Poetry’s managed virtual environment:
 
 ```bash
-.venv\Scripts\activate
+poetry install
+````
+
+### Set admin API key
+
+There are two supported ways to provide the OpenAI admin API key.
+
+#### 1. Environment variable
+
+> Windows command line
+
+```bash
+set OPENAI_API_KEY=sk-admin-xV...
 ```
 
-Two main ways to set admin api key.
+(Optional) Verify:
 
-1. Set environment variable for openAI API admin key.
-
-    > Windows command line
-    ```bash
-    set OPENAI_API_KEY=sk-admin-xV...
-    ```
-
-    Confirm if you want.
-
-    > Windows command line
-    ```bash
-    echo %OPENAI_API_KEY%
-    ```
-
-2. Do not set env var, the app will pop up a small dialogue window to prompt inputting an admin key. Input it in the input field. Optionally toggle on the "save to local config..." option, and it will be saved under `<user_home>\.token-meter\`.
-
-    Next time if the app finds a previously saved api key it will directly use that.
-
-    ⚠ The admin api key is saved as plain text in a json. The user should watch out for its security on their own.
-
-Finally run the app.
+> Windows command line
 
 ```bash
+echo %OPENAI_API_KEY%
+```
+
+#### 2. Application prompt
+
+If the environment variable is not set, the application will display a dialog prompting for an admin API key.
+
+* Enter the key in the input field
+* Optionally enable **“save to local config…”** to persist the key under:
+
+  ```
+  <user_home>\.token-meter\
+  ```
+
+On subsequent runs, a previously saved key will be used automatically.
+
+⚠ **Security note:** The admin API key is stored as plain text in a JSON file. Users are responsible for securing their local environment.
+
+### Finally run it
+
+Run the app inside Poetry’s environment:
+
+```bash
+poetry run python -m token_meter.main
+```
+
+Or, for interactive development:
+
+```bash
+poetry shell
 python -m token_meter.main
+```
+
+# Deps management using Poetry
+
+This project uses **[Poetry](https://python-poetry.org/)** for dependency management and version pinning.
+
+## Prerequisites
+
+* Python **3.11 – 3.14**
+* Poetry installed globally
+
+Install Poetry globally once per system:
+
+```bash
+pip install poetry
+```
+
+Verify:
+
+```bash
+poetry --version
+```
+
+---
+
+## Installing dependencies
+
+From the project root:
+
+```bash
+poetry install
+```
+
+This will:
+
+* Create or reuse a virtual environment
+* Install all runtime and development dependencies
+* Respect exact versions pinned in `poetry.lock`
+
+---
+
+## Activating the Poetry environment
+
+Option 1 — spawn a Poetry shell:
+
+```bash
+poetry shell
+```
+
+Option 2 — run commands inside the environment without activating it:
+
+```bash
+poetry run python -m token_meter.main
+```
+
+> If prefer a local `.venv` directory, configure Poetry once:
+>
+> ```bash
+> poetry config virtualenvs.in-project true
+> ```
+>
+> Then re-run `poetry install`.
+
+---
+
+## Adding or updating dependencies
+
+To add a new dependency:
+
+```bash
+poetry add httpx qasync
+```
+
+Poetry will:
+
+* Resolve compatible versions
+* Update `pyproject.toml`
+* Update `poetry.lock`
+
+To update all dependencies within allowed version ranges:
+
+```bash
+poetry update
 ```
