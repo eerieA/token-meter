@@ -5,6 +5,8 @@ from PySide6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
 
+from token_meter.ui.cost_popup import CostPopup
+
 RES_DIR = Path(__file__).parent.parent / "resources"
 
 
@@ -43,6 +45,15 @@ class UsageTray:
         self.tray.setContextMenu(self.menu)
         self.tray.show()
 
+        # Create the CostPopup and show a placeholder at startup
+        self._popup = CostPopup(auto_hide_ms=None)
+        try:
+            self._popup.show_placeholder()
+            self._popup.show_at_cursor()
+        except Exception:
+            # If positioning fails for any reason, just ensure the popup is visible
+            self._popup.show()
+
         # Debug: balloon to confirm the tray icon is active
         """ try:
             self.tray.showMessage(
@@ -70,16 +81,30 @@ class UsageTray:
             result = self.aggregator.fetch()
             # If fetch() returned a coroutine, schedule it on the asyncio loop
             if asyncio.iscoroutine(result):
+                # Show fetching status in the popup
+                try:
+                    self._popup.show_status("Retrieving…")
+                except Exception:
+                    pass
+
                 loop = asyncio.get_event_loop()
                 self._refresh_task = loop.create_task(self._refresh_async(result))
             else:
                 # Synchronous value
                 total = result
                 self.status.setText(f"OpenAI today: ${total:.2f}")
+                try:
+                    self._popup.show_cost(total)
+                except Exception:
+                    pass
         except Exception:
             tb = traceback.format_exc()
             print(tb)
             self.status.setText("Usage fetch failed (see console)")
+            try:
+                self._popup.show_status("Failed — see console")
+            except Exception:
+                pass
 
     async def _refresh_async(self, coro):
         try:
@@ -90,9 +115,19 @@ class UsageTray:
             except Exception:
                 # Fallback: cast to float for display
                 self.status.setText(f"OpenAI today: ${float(total):.2f}")
+
+            try:
+                self._popup.show_cost(total)
+            except Exception:
+                pass
         except Exception:
             tb = traceback.format_exc()
             print(tb)
             self.status.setText("Usage fetch failed (see console)")
+            try:
+                self._popup.show_status("Failed — see console")
+            except Exception:
+                pass
         finally:
             self._refresh_task = None
+
