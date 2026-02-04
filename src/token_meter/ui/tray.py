@@ -45,11 +45,12 @@ class UsageTray:
         self.tray.setContextMenu(self.menu)
         self.tray.show()
 
-        # Create the CostPopup and show a placeholder at startup
+        # Create the CostPopup and show a placeholder at startup.
+        # Use the saved position if available, or bottom-right by default
         self._popup = CostPopup(auto_hide_ms=None)
         try:
             self._popup.show_placeholder()
-            self._popup.show_at_cursor()
+            self._popup.show_with_animation()
         except Exception:
             # If positioning fails for any reason, just ensure the popup is visible
             self._popup.show()
@@ -130,4 +131,3 @@ class UsageTray:
                 pass
         finally:
             self._refresh_task = None
-

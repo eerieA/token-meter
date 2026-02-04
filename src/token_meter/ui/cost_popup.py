@@ -6,12 +6,22 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     QEasingCurve,
     QPoint,
+    QSettings,
 )
 from PySide6.QtGui import QFont, QGuiApplication, QCursor
 from decimal import Decimal
 
 
 class CostPopup(QWidget):
+    """A small, frameless popup that displays the current cost.
+
+    It:
+    - Remembers the last position using QSettings and shows there by default.
+    - Defaults to bottom-right of the active screen if no saved position.
+    - Makes the popup draggable (click+drag anywhere on it).
+    - Saves the new position after dragging.
+    """
+
     def __init__(self, parent=None, auto_hide_ms: Optional[int] = 8000):
         flags = (
             Qt.WindowType.Tool
@@ -62,24 +72,74 @@ class CostPopup(QWidget):
         self._anim.setDuration(220)
         self._anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
 
+        # Drag / position state
+        self._dragging = False
+        self._drag_offset = QPoint(0, 0)
+
+        # Settings to persist last position
+        self._settings = QSettings("token_meter", "token_meter")
+
+    def _load_saved_pos(self) -> Optional[QPoint]:
+        if self._settings.contains("cost_popup/pos_x") and self._settings.contains(
+            "cost_popup/pos_y"
+        ):
+            try:
+                x = int(self._settings.value("cost_popup/pos_x"))
+                y = int(self._settings.value("cost_popup/pos_y"))
+                return QPoint(x, y)
+            except Exception:
+                return None
+        return None
+
+    def _save_pos(self, pos: QPoint):
+        try:
+            self._settings.setValue("cost_popup/pos_x", int(pos.x()))
+            self._settings.setValue("cost_popup/pos_y", int(pos.y()))
+            self._settings.sync()
+        except Exception:
+            pass
+
+    def _clamp_to_screen(self, pos: QPoint) -> QPoint:
+        self.adjustSize()
+        screen = QGuiApplication.screenAt(pos) or QGuiApplication.primaryScreen()
+        if not screen:
+            return pos
+        geo = screen.availableGeometry()
+        x = min(max(geo.left(), pos.x()), geo.right() - self.width())
+        y = min(max(geo.top(), pos.y()), geo.bottom() - self.height())
+        return QPoint(x, y)
+
     def show_at_cursor(self, offset: Optional[QPoint] = None):
+        # Keep backwards-compatible explicit cursor placement
         if offset is None:
             offset = QPoint(10, 10)
 
         pos = QCursor.pos() + offset
-        self.adjustSize()
-        # Ensure the popup is entirely on-screen (simple clamp)
-        screen = QGuiApplication.screenAt(pos)
-        if screen:
-            geo = screen.availableGeometry()
-            x = min(max(geo.left(), pos.x()), geo.right() - self.width())
-            y = min(max(geo.top(), pos.y()), geo.bottom() - self.height())
-            self.move(x, y)
-        else:
-            self.move(pos)
+        pos = self._clamp_to_screen(pos)
+        self.move(pos)
         self.show_with_animation()
 
     def show_with_animation(self):
+        # Position the popup before showing. If the user is dragging, don't override their position.
+        if not self._dragging:
+            saved = self._load_saved_pos()
+            if saved:
+                pos = self._clamp_to_screen(saved)
+                self.move(pos)
+            else:
+                # Default to bottom-right of the active screen
+                screen = (
+                    QGuiApplication.screenAt(QCursor.pos())
+                    or QGuiApplication.primaryScreen()
+                )
+                if screen:
+                    geo = screen.availableGeometry()
+                    self.adjustSize()
+                    margin = 12
+                    x = geo.right() - self.width() - margin
+                    y = geo.bottom() - self.height() - margin
+                    self.move(x, y)
+
         self._anim.stop()
         self.setWindowOpacity(0.0)
         self.show()
@@ -102,6 +162,50 @@ class CostPopup(QWidget):
             pass
         self._anim.finished.connect(self.hide)
         self._anim.start()
+
+    def mousePressEvent(self, event):
+        if event.buttons() & Qt.MouseButton.LeftButton:
+            self._dragging = True
+            # event.pos() is relative to widget, use it to preserve cursor offset
+            self._drag_offset = event.pos()
+            # Keep the popup visible while dragging
+            self._hide_timer.stop()
+            # Slightly reduce opacity while dragging for feedback
+            try:
+                self.setWindowOpacity(0.95)
+            except Exception:
+                pass
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._dragging:
+            # Compute new top-left such that cursor stays at same offset
+            global_pos = (
+                event.globalPosition().toPoint()
+                if hasattr(event, "globalPosition")
+                else event.globalPos()
+            )
+            new_top_left = global_pos - self._drag_offset
+            new_top_left = self._clamp_to_screen(new_top_left)
+            self.move(new_top_left)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._dragging and not (event.buttons() & Qt.MouseButton.LeftButton):
+            self._dragging = False
+            # Save the final position
+            try:
+                self._save_pos(self.pos())
+            except Exception:
+                pass
+            # restart auto-hide timer when released
+            if self.auto_hide_ms:
+                self._hide_timer.start(self.auto_hide_ms)
+            try:
+                self.setWindowOpacity(1.0)
+            except Exception:
+                pass
+        super().mouseReleaseEvent(event)
 
     def show_cost(self, amount: Decimal | float | str):
         try:
