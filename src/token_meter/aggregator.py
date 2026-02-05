@@ -53,3 +53,45 @@ class UsageAggregator:
         save_cache(cache)
 
         return total_cost
+
+    async def fetch_since(
+        self, start_dt: datetime, end_dt: datetime | None = None
+    ) -> Decimal:
+        """Fetch costs from start_dt (a timezone-aware datetime) until end_dt (or now).
+
+        Returns a Decimal total cost in USD.
+        """
+        if start_dt.tzinfo is None:
+            # Assume UTC for naive datetimes
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+
+        start_ts = int(start_dt.timestamp())
+        end_ts = None
+        if end_dt:
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=timezone.utc)
+            end_ts = int(end_dt.timestamp())
+
+        logger.info("Fetching costs from %s to %s", start_ts, end_ts)
+
+        try:
+            records = await self.openai.fetch_costs(
+                start_ts, end_time=end_ts, paginate=True
+            )
+        except OpenAIProviderError as e:
+            logger.exception(
+                "Failed to fetch costs since %s: %s (status=%s)",
+                start_dt,
+                e,
+                getattr(e, "status", None),
+            )
+            raise
+
+        total_cost = sum((r.cost_usd for r in records), Decimal("0"))
+        logger.info(
+            "Aggregated total cost since %s: %s from %d records",
+            start_dt,
+            total_cost,
+            len(records),
+        )
+        return total_cost

@@ -228,3 +228,94 @@ class CostPopup(QWidget):
         self.value_label.setText("$--.--")
         self.status_label.setText("")
         self.show_with_animation()
+
+    def show_remaining(
+        self,
+        remaining: Decimal | float | str,
+        spent: Decimal | float | str,
+        baseline_amount: Decimal | float | str,
+        start_dt=None,
+    ):
+        """Display remaining credits prominently with color and a tooltip with details.
+
+        start_dt may be a datetime or an ISO string; the tooltip will include the baseline start.
+        """
+        try:
+            # Convert to floats for formatting safely
+            if isinstance(remaining, Decimal):
+                rem_val = float(remaining)
+            else:
+                rem_val = float(remaining)
+        except Exception:
+            # Fallback to raw string display
+            self.value_label.setText(str(remaining))
+            self.status_label.setText("")
+            self.show_with_animation()
+            return
+
+        # Choose color: red if negative, orange if low, green otherwise
+        color = "#4caf50"  # green
+        try:
+            # Determine thresholds
+            rem_dec = Decimal(str(remaining))
+            base_dec = Decimal(str(baseline_amount))
+            if rem_dec < 0:
+                color = "#e53935"  # red
+            else:
+                # low if less than 5% of baseline or absolute < 5
+                try:
+                    if base_dec > 0 and (rem_dec / base_dec) < Decimal("0.05"):
+                        color = "#fb8c00"  # orange
+                    elif rem_dec < Decimal("5"):
+                        color = "#fb8c00"
+                except Exception:
+                    pass
+        except Exception:
+            # ignore and keep default color
+            pass
+
+        # Update the value label with colored text
+        self.value_label.setText(f"${rem_val:,.2f}")
+        # Apply inline style for color to the value_label
+        try:
+            self.value_label.setStyleSheet(f"color: {color};")
+        except Exception:
+            pass
+
+        # Status line with spent and baseline
+        try:
+            if isinstance(spent, Decimal):
+                spent_val = float(spent)
+            else:
+                spent_val = float(spent)
+            if isinstance(baseline_amount, Decimal):
+                base_val = float(baseline_amount)
+            else:
+                base_val = float(baseline_amount)
+            # Format start_dt for display
+            start_display = None
+            try:
+                if start_dt is None:
+                    start_display = ""
+                elif hasattr(start_dt, "isoformat"):
+                    start_display = start_dt.date().isoformat()
+                else:
+                    # assume string
+                    start_display = str(start_dt).split("T")[0]
+            except Exception:
+                start_display = str(start_dt)
+
+            if start_display:
+                self.status_label.setText(
+                    f"Since {start_display}: spent ${spent_val:,.2f}"
+                )
+            else:
+                self.status_label.setText(f"Spent ${spent_val:,.2f} since baseline")
+
+            # Tooltip with more details
+            tooltip = f"Baseline: ${base_val:,.2f} since {start_display}\nSpent since baseline: ${spent_val:,.2f}\nRemaining: ${rem_val:,.2f}"
+            self.setToolTip(tooltip)
+        except Exception:
+            self.status_label.setText("")
+
+        self.show_with_animation()

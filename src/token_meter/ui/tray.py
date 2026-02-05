@@ -1,8 +1,11 @@
 from pathlib import Path
 import traceback
 import asyncio
+from decimal import Decimal
+from datetime import datetime, timezone
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 from PySide6.QtCore import QTimer
+
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
 
 from token_meter.ui.cost_popup import CostPopup
@@ -123,6 +126,57 @@ class UsageTray:
                     self._popup.show_cost(total)
                 except Exception:
                     pass
+
+                # If a baseline is configured, attempt to compute and show remaining
+                try:
+                    b = load_baseline()
+                    if b:
+                        amt = b.get("amount")
+                        start = b.get("start")
+                        try:
+                            baseline_amount = Decimal(str(amt))
+                        except Exception:
+                            baseline_amount = None
+
+                        if baseline_amount is not None and start:
+                            try:
+                                start_dt = datetime.fromisoformat(start)
+                                if start_dt.tzinfo is None:
+                                    start_dt = start_dt.replace(tzinfo=timezone.utc)
+                                # Fetch spent since baseline
+                                # Note: in the synchronous branch this will run synchronously
+                                # by awaiting on the aggregator if available; in the async
+                                # refresh path we await separately.
+                                # We call aggregator.fetch_since as a coroutine if needed.
+                                coro = self.aggregator.fetch_since(start_dt)
+                                if asyncio.iscoroutine(coro):
+                                    # We're inside the synchronous refresh path; schedule on loop
+                                    loop = asyncio.get_event_loop()
+                                    # Create a short-lived task and await its result
+                                    spent = loop.run_until_complete(coro)
+                                else:
+                                    spent = coro
+
+                                remaining = baseline_amount - spent
+
+                                try:
+                                    self.status.setText(
+                                        f"Remaining: ${remaining:.2f} since {start_dt.date().isoformat()}"
+                                    )
+                                except Exception:
+                                    self.status.setText("Remaining: (see popup)")
+
+                                try:
+                                    self._popup.show_remaining(
+                                        remaining, spent, baseline_amount, start_dt
+                                    )
+                                except Exception:
+                                    pass
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
         except Exception:
             tb = traceback.format_exc()
             print(tb)
@@ -146,6 +200,45 @@ class UsageTray:
                 self._popup.show_cost(total)
             except Exception:
                 pass
+
+            # If a baseline is configured, attempt to compute and show remaining
+            try:
+                b = load_baseline()
+                if b:
+                    amt = b.get("amount")
+                    start = b.get("start")
+                    try:
+                        baseline_amount = Decimal(str(amt))
+                    except Exception:
+                        baseline_amount = None
+
+                    if baseline_amount is not None and start:
+                        try:
+                            start_dt = datetime.fromisoformat(start)
+                            if start_dt.tzinfo is None:
+                                start_dt = start_dt.replace(tzinfo=timezone.utc)
+                            # Fetch spent since baseline
+                            spent = await self.aggregator.fetch_since(start_dt)
+                            remaining = baseline_amount - spent
+
+                            try:
+                                self.status.setText(
+                                    f"Remaining: ${remaining:.2f} since {start_dt.date().isoformat()}"
+                                )
+                            except Exception:
+                                self.status.setText("Remaining: (see popup)")
+
+                            try:
+                                self._popup.show_remaining(
+                                    remaining, spent, baseline_amount, start_dt
+                                )
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
         except Exception:
             tb = traceback.format_exc()
             print(tb)
