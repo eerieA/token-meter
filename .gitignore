@@ -15,9 +15,6 @@ dist/
 *.egg-info/
 .eggs/
 
-# PyInstaller / frozen apps
-*.spec
-
 # IDE / editor files
 .vscode/
 .idea/

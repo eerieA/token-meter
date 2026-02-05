@@ -12,3 +12,4 @@ httpx = "^0.28.1"
 qasync = "^0.28.0"
 
 [tool.poetry.group.dev.dependencies]
+pyinstaller = "^6.18.0"

@@ -12,6 +12,7 @@
     - [Installing dependencies](#installing-dependencies)
     - [Activating the Poetry environment](#activating-the-poetry-environment)
     - [Adding or updating dependencies](#adding-or-updating-dependencies)
+- [Building](#building)
 
 <!-- /TOC -->
 
@@ -172,4 +173,30 @@ To update all dependencies within allowed version ranges:
 
 ```bash
 poetry update
+```
+
+# Building
+
+Use PyInstaller, and let it work with poetry env.
+
+```bash
+poetry add --group dev pyinstaller
+```
+
+Run a "draft" build.
+
+> Windows command line
+
+```bash
+poetry run pyinstaller --name token-meter --onefile --windowed src\token_meter\main.py
+```
+
+It will generate some files. Of those files, modify `token-meter.spec` correctly.
+
+Or use the existing `token-meter.oned.spec` (onedir build) or `token-meter.onef.spec` (onefile build) in this repo. We rocommend `token-meter.onef.spec`, because the onefile build is about 240 mb, smaller than the onedir build which is about 622 mb.
+
+Then run the real building.
+
+```bash
+poetry run pyinstaller token-meter.spec
 ```
