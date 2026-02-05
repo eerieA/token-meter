@@ -43,3 +43,45 @@ def cache_valid(last_fetch: str, ttl_seconds: int) -> bool:
     now_dt = datetime.now(timezone.utc)
 
     return (now_dt - last_fetch_dt).total_seconds() < ttl_seconds
+
+
+# Baseline persistence helpers
+def load_baseline() -> dict | None:
+    """Return the saved baseline dict or None if not present.
+
+    Format: { "amount": "123.45", "start": "2024-01-01T00:00:00+00:00" }
+    """
+    try:
+        data = load_cache()
+        b = data.get("baseline")
+        if not b:
+            logger.info("No baseline configured in cache")
+            return None
+        return b
+    except Exception as e:
+        logger.exception("Failed to load baseline: %s", e)
+        return None
+
+
+def save_baseline(amount_str: str, start_iso: str):
+    """Save the baseline amount and ISO datetime into the cache file."""
+    try:
+        data = load_cache()
+        data["baseline"] = {"amount": str(amount_str), "start": str(start_iso)}
+        save_cache(data)
+        logger.info("Saved baseline to cache: %s %s", amount_str, start_iso)
+    except Exception as e:
+        logger.exception("Failed to save baseline: %s", e)
+
+
+def clear_baseline():
+    """Remove any saved baseline from the cache."""
+    try:
+        data = load_cache()
+        if "baseline" in data:
+            data.pop("baseline")
+            save_cache(data)
+            logger.info("Cleared baseline from cache")
+    except Exception as e:
+        logger.exception("Failed to clear baseline: %s", e)
+

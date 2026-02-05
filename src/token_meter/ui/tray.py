@@ -6,6 +6,8 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
 
 from token_meter.ui.cost_popup import CostPopup
+from token_meter.ui.baseline_dialog import BaselineDialog
+from token_meter.storage import load_baseline, save_baseline, clear_baseline
 
 RES_DIR = Path(__file__).parent.parent / "resources"
 
@@ -37,13 +39,36 @@ class UsageTray:
         self.tray = QSystemTrayIcon(icon)
         self.tray.setIcon(icon)
         self.menu = QMenu()
+
+        # Top status action shows either usage or baseline info
         self.status = self.menu.addAction("Fetching usage...")
+
+        # Actions for baseline management
+        self.menu.addAction("Set baseline credits...", self._on_set_baseline)
+        self._clear_baseline_action = self.menu.addAction(
+            "Clear baseline", self._on_clear_baseline
+        )
+
+        # Separator and quit
         self.menu.addSeparator()
         # Quit should exit the application, not just hide the tray
         self.menu.addAction("Quit", QApplication.quit)
 
         self.tray.setContextMenu(self.menu)
         self.tray.show()
+
+        # Initialize status based on existing baseline
+        try:
+            b = load_baseline()
+            if b:
+                amt = b.get("amount")
+                start = b.get("start")
+                self.status.setText(f"Baseline: ${amt} since {start}")
+            else:
+                self.status.setText("Fetching usage...")
+        except Exception:
+            # If anything goes wrong, keep the default status
+            pass
 
         # Create the CostPopup and show a placeholder at startup.
         # Use the saved position if available, or bottom-right by default
@@ -103,7 +128,7 @@ class UsageTray:
             print(tb)
             self.status.setText("Usage fetch failed (see console)")
             try:
-                self._popup.show_status("Failed — see console")
+                self._popup.show_status("Failed - see console log")
             except Exception:
                 pass
 
@@ -126,8 +151,34 @@ class UsageTray:
             print(tb)
             self.status.setText("Usage fetch failed (see console)")
             try:
-                self._popup.show_status("Failed — see console")
+                self._popup.show_status("Failed - see console log")
             except Exception:
                 pass
         finally:
             self._refresh_task = None
+
+    def _on_set_baseline(self):
+        try:
+            dlg = BaselineDialog()
+            ok = dlg.exec()
+            if ok:
+                amount_str, start_iso = dlg.get_values()
+                if amount_str and start_iso:
+                    try:
+                        save_baseline(amount_str, start_iso)
+                        self.status.setText(
+                            f"Baseline: ${amount_str} since {start_iso}"
+                        )
+                    except Exception:
+                        # If saving fails, surface a message in the tray status
+                        self.status.setText("Failed to save baseline (see console)")
+        except Exception:
+            pass
+
+    def _on_clear_baseline(self):
+        try:
+            clear_baseline()
+            self.status.setText("Baseline cleared")
+        except Exception:
+            # If clearing fails, ignore but log to console
+            print("Failed to clear baseline")
