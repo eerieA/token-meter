@@ -26,7 +26,7 @@ def main():
     # This is a tray-only application no open windows.
     app.setQuitOnLastWindowClosed(False)
 
-        # Run the qasync event loop (integrates asyncio with the Qt event loop).
+    # Run the qasync event loop (integrates asyncio with the Qt event loop).
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
 
@@ -64,7 +64,5 @@ def main():
         pass
 
 
-
 if __name__ == "__main__":
     main()
-

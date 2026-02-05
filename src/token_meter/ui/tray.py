@@ -91,92 +91,37 @@ class UsageTray:
         except Exception:
             pass """
 
+        # Timer for next refresh
         self.timer = QTimer()
         self.timer.timeout.connect(self.refresh)
-        self.timer.start(5 * 60 * 1000)
+        self.timer.start(3 * 60 * 1000)
 
         # Schedule initial refresh
         self.refresh()
 
     def refresh(self):
-        """Start a non-blocking refresh. If the aggregator.fetch is async it will
-        be scheduled on the asyncio event loop; otherwise we call it synchronously.
+        """Schedule a non-blocking refresh by creating a task for
+        UsageAggregator.fetch() on the running asyncio event loop.
+
+        Requires an active event loop (the app uses qasync). This function
+        does NOT attempt to run a synchronous aggregator.fetch() and will
+        raise or misbehave if no event loop is present.
         """
         # If a previous refresh task is running, don't start another
         if self._refresh_task and not self._refresh_task.done():
             return
 
+        # Always treat aggregator.fetch() as an async coroutine. Schedule it on the
+        # running event loop so the UI thread is never blocked.
         try:
-            result = self.aggregator.fetch()
-            # If fetch() returned a coroutine, schedule it on the asyncio loop
-            if asyncio.iscoroutine(result):
-                # Show fetching status in the popup
-                try:
-                    self._popup.show_status("Retrieving…")
-                except Exception:
-                    pass
+            try:
+                self._popup.show_status("Retrieving…")
+            except Exception:
+                pass
 
-                loop = asyncio.get_event_loop()
-                self._refresh_task = loop.create_task(self._refresh_async(result))
-            else:
-                # Synchronous value
-                total = result
-                self.status.setText(f"OpenAI today: ${total:.2f}")
-                try:
-                    self._popup.show_cost(total)
-                except Exception:
-                    pass
-
-                # If a baseline is configured, attempt to compute and show remaining
-                try:
-                    b = load_baseline()
-                    if b:
-                        amt = b.get("amount")
-                        start = b.get("start")
-                        try:
-                            baseline_amount = Decimal(str(amt))
-                        except Exception:
-                            baseline_amount = None
-
-                        if baseline_amount is not None and start:
-                            try:
-                                start_dt = datetime.fromisoformat(start)
-                                if start_dt.tzinfo is None:
-                                    start_dt = start_dt.replace(tzinfo=timezone.utc)
-                                # Fetch spent since baseline
-                                # Note: in the synchronous branch this will run synchronously
-                                # by awaiting on the aggregator if available; in the async
-                                # refresh path we await separately.
-                                # We call aggregator.fetch_since as a coroutine if needed.
-                                coro = self.aggregator.fetch_since(start_dt)
-                                if asyncio.iscoroutine(coro):
-                                    # We're inside the synchronous refresh path; schedule on loop
-                                    loop = asyncio.get_event_loop()
-                                    # Create a short-lived task and await its result
-                                    spent = loop.run_until_complete(coro)
-                                else:
-                                    spent = coro
-
-                                remaining = baseline_amount - spent
-
-                                try:
-                                    self.status.setText(
-                                        f"Remaining: ${remaining:.2f} since {start_dt.date().isoformat()}"
-                                    )
-                                except Exception:
-                                    self.status.setText("Remaining: (see popup)")
-
-                                try:
-                                    self._popup.show_remaining(
-                                        remaining, spent, baseline_amount, start_dt
-                                    )
-                                except Exception:
-                                    pass
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-
+            coro = self.aggregator.fetch()
+            loop = asyncio.get_event_loop()
+            self._refresh_task = loop.create_task(self._refresh_async(coro))
         except Exception:
             tb = traceback.format_exc()
             print(tb)
