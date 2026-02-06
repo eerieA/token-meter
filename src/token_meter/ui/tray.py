@@ -5,12 +5,12 @@ from decimal import Decimal
 from datetime import datetime, timezone
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 from PySide6.QtCore import QTimer
-
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
 
 from token_meter.ui.cost_popup import CostPopup
 from token_meter.ui.baseline_dialog import BaselineDialog
 from token_meter.storage import load_baseline, save_baseline, clear_baseline
+from token_meter.config import REFRESH_INTERVAL_MS
 
 RES_DIR = Path(__file__).parent.parent / "resources"
 
@@ -94,7 +94,7 @@ class UsageTray:
         # Timer for next refresh
         self.timer = QTimer()
         self.timer.timeout.connect(self.refresh)
-        self.timer.start(3 * 60 * 1000)
+        self.timer.start(REFRESH_INTERVAL_MS)
 
         # Schedule initial refresh
         self.refresh()

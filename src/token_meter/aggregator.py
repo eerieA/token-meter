@@ -3,6 +3,7 @@ from decimal import Decimal
 from token_meter.providers.openai import AsyncOpenAIProvider, OpenAIProviderError
 from token_meter.storage import load_cache, save_cache, cache_valid
 from token_meter.logger import get_logger
+from token_meter.config import CACHE_TTL_SECONDS
 
 logger = get_logger(__name__)
 
@@ -18,7 +19,7 @@ class UsageAggregator:
         fetched_at = now_dt.isoformat()
 
         # If have a recent cached total, return it
-        if "openai" in cache and cache_valid(cache["openai"]["fetched_at"], 300):
+        if "openai" in cache and cache_valid(cache["openai"]["fetched_at"], CACHE_TTL_SECONDS):
             cached = cache["openai"]["data"]
             try:
                 value = Decimal(str(cached))
