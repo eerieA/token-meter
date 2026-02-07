@@ -1,5 +1,5 @@
 from typing import Optional
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QFrame, QGraphicsDropShadowEffect
 from PySide6.QtCore import (
     Qt,
     QTimer,
@@ -8,11 +8,12 @@ from PySide6.QtCore import (
     QPoint,
     QSettings,
 )
-from PySide6.QtGui import QFont, QGuiApplication, QCursor
+from PySide6.QtGui import QFont, QGuiApplication, QCursor, QColor
 from decimal import Decimal
 
 
 class CostPopup(QWidget):
+
     """A small, frameless popup that displays the current cost.
 
     It:
@@ -38,9 +39,27 @@ class CostPopup(QWidget):
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self.hide_with_animation)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(6)
+        # Build a framed layout: outer border frame with an inner semi-transparent panel
+        self.setObjectName("CostPopup")
+
+        outer_layout = QVBoxLayout(self)
+        # Leave space for the visible border ring
+        outer_layout.setContentsMargins(6, 6, 6, 6)
+        outer_layout.setSpacing(0)
+
+        # Create the border frame which will draw the neon border
+        self.borderFrame = QFrame(self)
+        self.borderFrame.setObjectName("borderFrame")
+        bf_layout = QVBoxLayout(self.borderFrame)
+        bf_layout.setContentsMargins(0, 0, 0, 0)    # This is the spacing btwn outer edge of the inner pannel and the inner edge of the border
+        bf_layout.setSpacing(0)
+
+        # Inner semi-transparent panel that holds the labels
+        self.innerPanel = QWidget(self.borderFrame)
+        self.innerPanel.setObjectName("innerPanel")
+        panel_layout = QVBoxLayout(self.innerPanel)
+        panel_layout.setContentsMargins(16, 12, 16, 12)
+        panel_layout.setSpacing(6)
 
         self.value_label = QLabel("$--.--")
         big_font = QFont()
@@ -55,17 +74,35 @@ class CostPopup(QWidget):
         self.status_label.setFont(small_font)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout.addWidget(self.value_label)
-        layout.addWidget(self.status_label)
+        panel_layout.addWidget(self.value_label)
+        panel_layout.addWidget(self.status_label)
 
+        bf_layout.addWidget(self.innerPanel)
+        outer_layout.addWidget(self.borderFrame)
+
+        # Outer neon glow effect applied to the border frame
+        glow = QGraphicsDropShadowEffect(self)
+        glow.setBlurRadius(22)
+        glow.setColor(QColor(172, 203, 233, 180))
+        glow.setOffset(0, 0)
+        self.borderFrame.setGraphicsEffect(glow)
+
+        # Stylesheet: thin neon border on the frame and semi-transparent inner panel
+        # relationship: border-radius of borderFrame = border width + border-radius of innerPanel
         self.setStyleSheet(
             """
-            QWidget {
-                background: rgba(18,18,18,0.92);
-                color: white;
-                border-radius: 10px;
+            QWidget#CostPopup { background: transparent; }
+            QFrame#borderFrame {
+                border-radius: 6px;
+                border: 2px solid rgba(224,237,245,1.0);
+                background: transparent;
             }
-        """
+            QWidget#innerPanel {
+                background: rgba(10,12,18,0.4);
+                border-radius: 4px;
+            }
+            QLabel { color: #eaf6ff; }
+            """
         )
 
         self._anim = QPropertyAnimation(self, b"windowOpacity", self)
@@ -254,20 +291,19 @@ class CostPopup(QWidget):
             return
 
         # Choose color: red if negative, orange if low, green otherwise
-        color = "#4caf50"  # green
+        color = "#e0edf5"  # healthy num color, same as popup border
         try:
-            # Determine thresholds
             rem_dec = Decimal(str(remaining))
             base_dec = Decimal(str(baseline_amount))
             if rem_dec < 0:
-                color = "#e53935"  # red
+                color = "#8562d8"  # negtive num color
             else:
                 # low if less than 5% of baseline or absolute < 5
                 try:
                     if base_dec > 0 and (rem_dec / base_dec) < Decimal("0.05"):
-                        color = "#fb8c00"  # orange
-                    elif rem_dec < Decimal("5"):
-                        color = "#fb8c00"
+                        color = "#ee4561"  # low num color
+                    elif rem_dec < Decimal("0.5"):
+                        color = "#ee4561"
                 except Exception:
                     pass
         except Exception:
