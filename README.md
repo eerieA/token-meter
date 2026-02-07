@@ -198,5 +198,5 @@ Or use the existing `token-meter.oned.spec` (onedir build) or `token-meter.onef.
 Then run the real building.
 
 ```bash
-poetry run pyinstaller token-meter.spec
+poetry run pyinstaller token-meter.onef.spec
 ```

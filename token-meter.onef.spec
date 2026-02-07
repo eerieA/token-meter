@@ -69,17 +69,3 @@ exe = EXE(
     icon="src/token_meter/resources/icon.ico",
     console=False,
 )
-
-# ------------------------
-# COLLECT (onefile)
-# ------------------------
-from PyInstaller.building.api import COLLECT
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,  # compress DLLs to save a few MB
-    name="token-meter",
-)
