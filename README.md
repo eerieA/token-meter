@@ -36,7 +36,44 @@ Obtain cost data from provider's endpoint and display it in some GUI.
   - Reads API key from OPENAI_API_KEY env var or from a local keystore (~/.config/token_meter/credentials.json).
   - If missing, prompts the user in a modal dialog and can save the key locally (file saved with an attempted 0o600 chmod and logged).
 
-# Local test steps
+# Notes for running binaries
+
+## Windows
+
+Run token-meter.exe.
+
+## Ubuntu
+
+Install Runtime dependencies (all desktops).
+
+```bash
+sudo apt update
+sudo apt install -y libxcb-cursor0 libxcb1 libx11-xcb1 libxcb-xinerama0 libxkbcommon-x11-0 libgl1 libglu1-mesa
+```
+
+Additional requirement for Ubuntu GNOME only:
+
+```bash
+sudo apt install -y \
+  libayatana-appindicator3-1 \
+  gnome-shell-extension-appindicator \
+  gnome-extensions-app
+
+gnome-extensions-app (start the extensions app)
+```
+
+, find the item that looks like “Ubuntu AppIndicators and”, enable it and log out/in.
+
+Then run the token-meter binary. For example by
+
+```bash
+./token-meter
+```
+
+.
+
+
+# Local test steps for dev
 
 This project uses **Poetry** for dependency management. Do **not** manually activate a virtual environment.
 
