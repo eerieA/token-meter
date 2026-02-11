@@ -1,47 +1,61 @@
-# Python bytecode / caches
-__pycache__/
-*.py[cod]
-*$py.class
+# =========================
+# Rust / Cargo
+# =========================
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-env/
+# Build output
+/target/
 
-# Build / packaging outputs
-build/
-dist/
-*.egg-info/
-.eggs/
+# (IGNORE for libraries, COMMIT for binaries if want reproducible builds)
+# Cargo.lock
 
-# IDE / editor files
+# Cargo internal state
+.cargo/
+
+# =========================
+# Rust tooling
+# =========================
+
+# Rust Analyzer / Flycheck
+**/flycheck*
+.rustc_info.json
+
+# =========================
+# Logs and temporary files
+# =========================
+
+*.log
+*.tmp
+*.bak
+
+# =========================
+# Windows
+# =========================
+
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Crash dumps
+*.stackdump
+
+# =========================
+# Editors / IDEs
+# =========================
+
+# VS Code
 .vscode/
+!.vscode/extensions.json
+
+# JetBrains IDEs
 .idea/
 *.iml
 
-# OS-specific files
+# Vim
+*.swp
+*.swo
+
+# =========================
+# OS / misc
+# =========================
+
 .DS_Store
-Thumbs.db
-desktop.ini
-
-# Logs / runtime artifacts
-*.log
-
-# Local environment / secrets
-.env
-.env.*
-.envrc
-
-# Test / coverage artifacts
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Qt / UI artifacts
-*.qmlc
-*.jsc
-
-# Local data files
-data/
-cache/

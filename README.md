@@ -1,239 +1,42 @@
-<!-- TOC -->
-
-- [What does it do](#what-does-it-do)
-- [Local test steps](#local-test-steps)
-    - [Install dependencies](#install-dependencies)
-    - [Set admin API key](#set-admin-api-key)
-        - [1. Environment variable](#1-environment-variable)
-        - [2. Application prompt](#2-application-prompt)
-    - [Finally run it](#finally-run-it)
-- [Deps management using Poetry](#deps-management-using-poetry)
-    - [Prerequisites](#prerequisites)
-    - [Installing dependencies](#installing-dependencies)
-    - [Activating the Poetry environment](#activating-the-poetry-environment)
-    - [Adding or updating dependencies](#adding-or-updating-dependencies)
-- [Building](#building)
-
-<!-- /TOC -->
-
-# What does it do
-
-Obtain cost data from provider's endpoint and display it in some GUI.
-
-- UI
-  - Runs as a small PySide6 system-tray app with a right‑click menu and status item.
-- Data fetching & aggregation
-  - Polls OpenAI /v1/organization/costs for month-to-date usage starting at UTC month start.
-  - Supports full pagination across pages and normalizes buckets to UsageRecord.
-  - Uses Decimal for monetary amounts and aggregates them.
-- Resilience & observability
-  - Retries requests with exponential backoff (3 attempts; retries on 429 and 5xx).
-  - Raises annotated OpenAIProviderError on HTTP failures (status + body available).
-  - Rotating file logging (~/ .cache/token_meter.log) for requests, retries, errors, and cache ops.
-- Local caching
-  - Caches most recent total in JSON (~/.cache/ai_usage.json) for 5 minutes to avoid redundant requests.
-- Key handling
-  - Reads API key from OPENAI_API_KEY env var or from a local keystore (~/.config/token_meter/credentials.json).
-  - If missing, prompts the user in a modal dialog and can save the key locally (file saved with an attempted 0o600 chmod and logged).
-
-# Notes for running binaries
-
-## Windows
-
-Run token-meter.exe.
-
-## Ubuntu
-
-Install Runtime dependencies (all desktops).
-
-```bash
-sudo apt update
-sudo apt install -y libxcb-cursor0 libxcb1 libx11-xcb1 libxcb-xinerama0 libxkbcommon-x11-0 libgl1 libglu1-mesa
-```
-
-Additional requirement for Ubuntu GNOME only:
-
-```bash
-sudo apt install -y \
-  libayatana-appindicator3-1 \
-  gnome-shell-extension-appindicator \
-  gnome-extensions-app
-
-gnome-extensions-app (start the extensions app)
-```
-
-, find the item that looks like “Ubuntu AppIndicators and”, enable it and log out/in.
-
-Then run the token-meter binary. For example by
-
-```bash
-./token-meter
-```
-
-.
-
-
-# Local test steps for dev
-
-This project uses **Poetry** for dependency management. Do **not** manually activate a virtual environment.
-
-## Install dependencies
-
-From the project root, install all dependencies into Poetry’s managed virtual environment:
-
-```bash
-poetry install
-```
-
-## Set admin API key
-
-There are two supported ways to provide the OpenAI admin API key.
-
-### 1. Environment variable
-
-> Windows command line
-
-```bash
-set OPENAI_API_KEY=sk-admin-xV...
-```
-
-(Optional) Verify:
-
-> Windows command line
-
-```bash
-echo %OPENAI_API_KEY%
-```
-
-### 2. Application prompt
-
-If the environment variable is not set, the application will display a dialog prompting for an admin API key.
-
-- Enter the key in the input field
-- Optionally enable **“save to local config…”** to persist the key under:
-
-  ```
-  <user_home>\.token-meter\
-  ```
-
-On subsequent runs, a previously saved key will be used automatically.
-
-⚠ **Security note:** The admin API key is stored as plain text in a JSON file. Users are responsible for securing their local environment.
-
-## Finally run it
-
-Run the app inside Poetry’s environment:
-
-```bash
-poetry run python -m token_meter.main
-```
-
-Or, for interactive development:
-
-```bash
-poetry shell
-python -m token_meter.main
-```
-
-# Deps management using Poetry
-
-This project uses **[Poetry](https://python-poetry.org/)** for dependency management and version pinning.
-
-## Prerequisites
-
-- Python **3.11 – 3.14**
-- Poetry installed globally
-
-Install Poetry globally once per system:
-
-```bash
-pip install poetry
-```
-
-Verify:
-
-```bash
-poetry --version
-```
-
-## Installing dependencies
-
-From the project root:
-
-```bash
-poetry install
-```
-
-This will:
-
-- Create or reuse a virtual environment
-- Install all runtime and development dependencies
-- Respect exact versions pinned in `poetry.lock`
-
-## Activating the Poetry environment
-
-Option 1: spawn a Poetry shell:
-
-```bash
-poetry shell
-```
-
-Option 2: run commands inside the environment without activating it:
-
-```bash
-poetry run python -m token_meter.main
-```
-
-> If prefer a local `.venv` directory, configure Poetry once:
->
-> ```bash
-> poetry config virtualenvs.in-project true
-> ```
->
-> Then re-run `poetry install`.
-
-## Adding or updating dependencies
-
-To add a new dependency:
-
-```bash
-poetry add httpx qasync
-```
-
-Poetry will:
-
-- Resolve compatible versions
-- Update `pyproject.toml`
-- Update `poetry.lock`
-
-To update all dependencies within allowed version ranges:
-
-```bash
-poetry update
-```
-
-# Building
-
-Use PyInstaller, and let it work with poetry env.
-
-```bash
-poetry add --group dev pyinstaller
-```
-
-Run a "draft" build.
-
-> Windows command line
-
-```bash
-poetry run pyinstaller --name token-meter --onefile --windowed src\token_meter\main.py
-```
-
-It will generate some files. Of those files, modify `token-meter.spec` correctly.
-
-Or use the existing `token-meter.oned.spec` (onedir build) or `token-meter.onef.spec` (onefile build) in this repo. We rocommend `token-meter.onef.spec`, because the onefile build is about 240 mb, smaller than the onedir build which is about 622 mb.
-
-Then run the real building.
-
-```bash
-poetry run pyinstaller token-meter.onef.spec
-```
+This is a minimal Rust + egui prototype of the token-meter app, which was originally built with PySide6.
+
+Structure:
+- Cargo.toml
+- src/
+  - main.rs        : egui application and background worker
+  - providers/openai.rs : OpenAI HTTP provider + pagination + retries
+  - aggregator.rs  : high-level aggregation helpers
+  - storage.rs     : simple config/cache persistence to user config dir
+  - domain.rs      : small UsageRecord definition
+
+What it implements:
+- Async OpenAI cost fetching (pagination + simple retry) using reqwest + tokio
+- Aggregation of month-to-date total into a Decimal
+- Small egui window allowing entering API key, saving it, and triggering a fetch
+- Network work runs on a background tokio runtime thread and results are posted back to the UI via channels
+
+What it does NOT implement (for scoping and tech stack practicals):
+- No system tray / context menu
+- No animated frameless popup
+
+How to run:
+- Install Rust toolchain
+- From the token-meter-egui directory run: cargo run --release
+
+How the prototype works (quick)
+- The egui window shows a text field for the OpenAI admin API key, a Save button (saves to user config dir), and a Fetch button.
+- When you click Fetch, the UI sends a request to the background worker.
+- A tokio runtime on a background thread performs the HTTP requests (pagination + retry) and sends back either success with Decimal total or a failure message.
+- The UI displays status and the resulting total.
+
+Notes and caveats
+- This is a minimal prototype focused on the backend HTTP calls, aggregation, and a simple widget UI. It intentionally does not implement a system tray or platform-specific popup.
+- Used rust_decimal for monetary calculations to keep precision similar to the Python Decimal usage.
+- The OpenAI response parsing assumes the organization/costs endpoint shape similar to what the old Python code expects (buckets with results that have amount.value). If the API responses differ, we can adapt the deserialization.
+
+Next steps possibly
+- Add automatic periodic refresh (like the original app’s QTimer) that triggers fetches on an interval.
+- Add a small settings UI for baseline credits and persistence (storage has helpers; UI wiring remains).
+- Implement a more resilient background worker (task queue, cancellation support).
+- Implement system tray + popup (this requires platform-specific tray crate or integration).
+- Tune Cargo features to further reduce binary size (strip, s or z opt-levels, disable default features).
