@@ -1,16 +1,16 @@
-use eframe::egui;
-use std::sync::mpsc::{self, Sender, Receiver};
-use std::thread;
 use anyhow::Result;
+use eframe::egui;
 use rust_decimal::Decimal;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
 
-mod providers;
 mod aggregator;
-mod storage;
 mod domain;
+mod providers;
+mod storage;
 
 use aggregator::UsageAggregator;
-use storage::{load_api_key, save_api_key, load_cache, is_cache_outdated};
+use storage::{is_cache_outdated, load_api_key, load_cache, save_api_key};
 
 #[derive(Debug)]
 enum BgMessage {
@@ -85,7 +85,7 @@ impl Default for TokenMeterApp {
                 setup_input: String::new(),
                 drag_icon_texture: None,
             };
-            
+
             // Try to load cached data or fetch if needed
             if let Some(cache) = load_cache() {
                 if !is_cache_outdated() {
@@ -96,13 +96,17 @@ impl Default for TokenMeterApp {
                     }
                 } else {
                     // Cache is outdated, fetch new data
-                    app.bg_tx.send(BgMessage::FetchMonthToDate { api_key: saved_key }).ok();
+                    app.bg_tx
+                        .send(BgMessage::FetchMonthToDate { api_key: saved_key })
+                        .ok();
                 }
             } else {
                 // No cache, fetch new data
-                app.bg_tx.send(BgMessage::FetchMonthToDate { api_key: saved_key }).ok();
+                app.bg_tx
+                    .send(BgMessage::FetchMonthToDate { api_key: saved_key })
+                    .ok();
             }
-            
+
             app
         } else {
             // No API key, show setup window
@@ -132,7 +136,7 @@ impl eframe::App for TokenMeterApp {
                 ));
             }
         }
-        
+
         // process any UI messages from background
         while let Ok(msg) = self.ui_rx.try_recv() {
             match msg {
@@ -180,17 +184,17 @@ impl TokenMeterApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Token Meter Setup");
             ui.add_space(20.0);
-            
+
             ui.label("Please enter your OpenAI API key:");
             ui.add_space(10.0);
-            
+
             ui.horizontal(|ui| {
                 ui.label("API Key:");
                 ui.text_edit_singleline(&mut self.setup_input);
             });
-            
+
             ui.add_space(20.0);
-            
+
             ui.horizontal(|ui| {
                 if ui.button("Save & Start").clicked() {
                     if !self.setup_input.is_empty() {
@@ -201,16 +205,20 @@ impl TokenMeterApp {
                             self.state = AppState::Main;
                             self.api_key = self.setup_input.clone();
                             self.status = "Fetching...".to_string();
-                            self.bg_tx.send(BgMessage::FetchMonthToDate { api_key: self.setup_input.clone() }).ok();
+                            self.bg_tx
+                                .send(BgMessage::FetchMonthToDate {
+                                    api_key: self.setup_input.clone(),
+                                })
+                                .ok();
                         }
                     }
                 }
-                
+
                 if ui.button("Cancel").clicked() {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
                 }
             });
-            
+
             if !self.status.is_empty() && self.status != "Setup required" {
                 ui.add_space(10.0);
                 ui.label(&self.status);
@@ -223,12 +231,12 @@ impl TokenMeterApp {
             // Top row with drag icon on the right
             ui.horizontal(|ui| {
                 ui.add_space(ui.available_width() - 16.0); // Push icon to the right
-                
+
                 let drag_response = if let Some(texture) = &self.drag_icon_texture {
                     ui.add(
                         egui::Image::from_texture(texture)
                             .fit_to_exact_size(egui::vec2(16.0, 16.0))
-                            .sense(egui::Sense::click_and_drag())
+                            .sense(egui::Sense::click_and_drag()),
                     )
                 } else {
                     // Fallback to text if image not loaded
@@ -237,25 +245,33 @@ impl TokenMeterApp {
                         egui::Label::new("⋮⋮").sense(egui::Sense::click_and_drag()),
                     )
                 };
-                
+
                 if drag_response.drag_started() {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::StartDrag);
                 }
             });
-            
+
             ui.add_space(4.0);
 
-            ui.label(format!("Status: {}", self.status));
+            // the cost text
             if let Some(total) = &self.total {
-                ui.label(format!("MTD: ${:.2}", total));
+                ui.label(
+                    egui::RichText::new(format!("MTD: ${:.2}", total))
+                        .size(40.0)
+                        .color(egui::Color32::from_rgb(0, 255, 0)),
+                );
             } else {
-                ui.label("MTD: --");
+                ui.label(egui::RichText::new("MTD: --").size(40.0));
             }
-            
+            // the status text
+            ui.label(format!("Status: {}", self.status));
+
             ui.horizontal(|ui| {
                 if ui.button("📊 Refresh").clicked() {
                     let api = self.api_key.clone();
-                    self.bg_tx.send(BgMessage::FetchMonthToDate { api_key: api }).ok();
+                    self.bg_tx
+                        .send(BgMessage::FetchMonthToDate { api_key: api })
+                        .ok();
                 }
             });
         });
@@ -273,12 +289,13 @@ fn main() -> Result<()> {
             .with_always_on_top(),
         ..Default::default()
     };
-    
+
     eframe::run_native(
         "token-meter-egui",
         native_options,
         Box::new(|_cc| Box::new(TokenMeterApp::default())),
-    ).map_err(|e| anyhow::anyhow!("Failed to run eframe: {}", e))?;
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to run eframe: {}", e))?;
 
     Ok(())
 }
