@@ -1,5 +1,6 @@
 <!-- TOC -->
 
+- [WARNING](#warning)
 - [What does it do](#what-does-it-do)
 - [Local test steps](#local-test-steps)
     - [Install dependencies](#install-dependencies)
@@ -15,6 +16,10 @@
 - [Building](#building)
 
 <!-- /TOC -->
+
+# WARNING
+
+This branch contains the legacy PySide6 implementation. It is not meant to be updated anymore
 
 # What does it do
 
