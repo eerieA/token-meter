@@ -230,10 +230,6 @@ impl TokenMeterApp {
                     let api = self.api_key.clone();
                     self.bg_tx.send(BgMessage::FetchMonthToDate { api_key: api }).ok();
                 }
-                if ui.button("🗑️ Clear").clicked() {
-                    self.total = None;
-                    self.status = "Cleared".to_string();
-                }
             });
 
             ui.add_space(6.0);
