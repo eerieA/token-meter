@@ -1,9 +1,9 @@
-use directories::ProjectDirs;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use anyhow::{Result, Context};
+use std::env;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CacheData {
@@ -19,7 +19,11 @@ pub struct Baseline {
 }
 
 fn base_dir() -> Option<PathBuf> {
-    ProjectDirs::from("com", "example", "token-meter").map(|d| d.config_dir().to_path_buf())
+    if let Some(home) = env::home_dir() {
+        Some(home.join(".token-meter"))
+    } else {
+        None
+    }
 }
 
 pub fn save_api_key(key: &str) -> Result<()> {
@@ -50,8 +54,19 @@ pub fn save_cache(total: &Decimal) -> Result<()> {
     let mut p = base_dir().context("cannot find config dir")?;
     fs::create_dir_all(&p).ok();
     p.push("api_usage.json");
-    let j = serde_json::json!({"openai": {"fetched_at": chrono::Utc::now().to_rfc3339(), "data": total.to_string()}});
-    fs::write(&p, serde_json::to_string_pretty(&j)?).context("writing cache file")?;
+    
+    // Load existing cache data or create new
+    let mut data = load_cache().unwrap_or(CacheData { 
+        openai_total: None, 
+        fetched_at: None, 
+        baseline: None 
+    });
+    
+    // Update the cache data
+    data.openai_total = Some(total.to_string());
+    data.fetched_at = Some(chrono::Utc::now().to_rfc3339());
+    
+    fs::write(&p, serde_json::to_string_pretty(&data)?).context("writing cache file")?;
     Ok(())
 }
 
@@ -67,6 +82,24 @@ pub fn load_cache() -> Option<CacheData> {
             Err(_) => None,
         },
         Err(_) => None,
+    }
+}
+
+pub fn is_cache_outdated() -> bool {
+    if let Some(cache) = load_cache() {
+        if let Some(fetched_at) = cache.fetched_at {
+            match chrono::DateTime::parse_from_rfc3339(&fetched_at) {
+                Ok(dt) => {
+                    let cache_age = chrono::Utc::now() - chrono::DateTime::from_naive_utc_and_offset(dt.naive_utc(), chrono::Utc);
+                    cache_age.num_hours() >= 1 // Cache is outdated after 1 hour
+                }
+                Err(_) => true, // Invalid timestamp, treat as outdated
+            }
+        } else {
+            true // No timestamp, treat as outdated
+        }
+    } else {
+        true // No cache, treat as outdated
     }
 }
 

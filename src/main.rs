@@ -10,7 +10,7 @@ mod storage;
 mod domain;
 
 use aggregator::UsageAggregator;
-use storage::{load_api_key, save_api_key};
+use storage::{load_api_key, save_api_key, load_cache, is_cache_outdated};
 
 #[derive(Debug)]
 enum BgMessage {
@@ -24,12 +24,19 @@ enum UiMessage {
     Failed(String),
 }
 
+enum AppState {
+    Setup,
+    Main,
+}
+
 struct TokenMeterApp {
+    state: AppState,
     api_key: String,
     status: String,
     total: Option<Decimal>,
     ui_rx: Receiver<UiMessage>,
     bg_tx: Sender<BgMessage>,
+    setup_input: String,
 }
 
 impl Default for TokenMeterApp {
@@ -64,15 +71,48 @@ impl Default for TokenMeterApp {
             }
         });
 
-        // attempt to load saved key
-        let api_key = load_api_key().unwrap_or_default();
-
-        Self {
-            api_key,
-            status: "Idle".to_string(),
-            total: None,
-            ui_rx,
-            bg_tx,
+        // Check if we have a saved API key
+        if let Some(saved_key) = load_api_key() {
+            // We have an API key, go to main state
+            let mut app = Self {
+                state: AppState::Main,
+                api_key: saved_key.clone(),
+                status: "Loading...".to_string(),
+                total: None,
+                ui_rx,
+                bg_tx,
+                setup_input: String::new(),
+            };
+            
+            // Try to load cached data or fetch if needed
+            if let Some(cache) = load_cache() {
+                if !is_cache_outdated() {
+                    // Use cached data
+                    if let Some(total_str) = cache.openai_total {
+                        app.total = total_str.parse().ok();
+                        app.status = "Loaded from cache".to_string();
+                    }
+                } else {
+                    // Cache is outdated, fetch new data
+                    app.bg_tx.send(BgMessage::FetchMonthToDate { api_key: saved_key }).ok();
+                }
+            } else {
+                // No cache, fetch new data
+                app.bg_tx.send(BgMessage::FetchMonthToDate { api_key: saved_key }).ok();
+            }
+            
+            app
+        } else {
+            // No API key, show setup window
+            Self {
+                state: AppState::Setup,
+                api_key: String::new(),
+                status: "Setup required".to_string(),
+                total: None,
+                ui_rx,
+                bg_tx,
+                setup_input: String::new(),
+            }
         }
     }
 }
@@ -88,6 +128,10 @@ impl eframe::App for TokenMeterApp {
                 UiMessage::Success(total) => {
                     self.total = Some(total);
                     self.status = "Fetched".into();
+                    // Save to cache
+                    if let Err(_) = storage::save_cache(&total) {
+                        // Log error but don't fail
+                    }
                 }
                 UiMessage::Failed(err) => {
                     self.status = format!("Failed: {}", err);
@@ -96,6 +140,61 @@ impl eframe::App for TokenMeterApp {
             ctx.request_repaint();
         }
 
+        match self.state {
+            AppState::Setup => {
+                self.show_setup_window(ctx);
+            }
+            AppState::Main => {
+                self.show_main_widget(ctx);
+            }
+        }
+    }
+}
+
+impl TokenMeterApp {
+    fn show_setup_window(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Token Meter Setup");
+            ui.add_space(20.0);
+            
+            ui.label("Please enter your OpenAI API key:");
+            ui.add_space(10.0);
+            
+            ui.horizontal(|ui| {
+                ui.label("API Key:");
+                ui.text_edit_singleline(&mut self.setup_input);
+            });
+            
+            ui.add_space(20.0);
+            
+            ui.horizontal(|ui| {
+                if ui.button("Save & Start").clicked() {
+                    if !self.setup_input.is_empty() {
+                        if let Err(e) = save_api_key(&self.setup_input) {
+                            self.status = format!("Failed to save: {}", e);
+                        } else {
+                            // Switch to main state and start fetching
+                            self.state = AppState::Main;
+                            self.api_key = self.setup_input.clone();
+                            self.status = "Fetching...".to_string();
+                            self.bg_tx.send(BgMessage::FetchMonthToDate { api_key: self.setup_input.clone() }).ok();
+                        }
+                    }
+                }
+                
+                if ui.button("Cancel").clicked() {
+                    ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
+                }
+            });
+            
+            if !self.status.is_empty() && self.status != "Setup required" {
+                ui.add_space(10.0);
+                ui.label(&self.status);
+            }
+        });
+    }
+
+    fn show_main_widget(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             // Add a draggable header area
             ui.horizontal(|ui| {
@@ -127,13 +226,13 @@ impl eframe::App for TokenMeterApp {
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                if ui.button("📊 Fetch").clicked() {
+                if ui.button("📊 Refresh").clicked() {
                     let api = self.api_key.clone();
                     self.bg_tx.send(BgMessage::FetchMonthToDate { api_key: api }).ok();
                 }
                 if ui.button("🗑️ Clear").clicked() {
                     self.total = None;
-                    self.status = "Cleared".into();
+                    self.status = "Cleared".to_string();
                 }
             });
 
