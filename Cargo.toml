@@ -2,10 +2,13 @@
 name = "token_meter_egui"
 version = "0.1.0"
 edition = "2021"
+include = ["src/**/*.rs", "assets/**/*"]
 
 [dependencies]
 # GUI
-eframe = "0.26"
+eframe = { version = "0.26", features = ["default_fonts", "glow"] }
+egui_extras = { version = "0.26", features = ["image"] }
+image = "0.24"
 # Async runtime and HTTP
 tokio = { version = "1.37", features = ["rt-multi-thread", "macros", "time"] }
 reqwest = { version = "0.11", features = ["json", "rustls-tls"] }

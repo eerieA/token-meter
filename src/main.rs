@@ -37,6 +37,7 @@ struct TokenMeterApp {
     ui_rx: Receiver<UiMessage>,
     bg_tx: Sender<BgMessage>,
     setup_input: String,
+    drag_icon_texture: Option<egui::TextureHandle>,
 }
 
 impl Default for TokenMeterApp {
@@ -82,6 +83,7 @@ impl Default for TokenMeterApp {
                 ui_rx,
                 bg_tx,
                 setup_input: String::new(),
+                drag_icon_texture: None,
             };
             
             // Try to load cached data or fetch if needed
@@ -112,6 +114,7 @@ impl Default for TokenMeterApp {
                 ui_rx,
                 bg_tx,
                 setup_input: String::new(),
+                drag_icon_texture: None,
             }
         }
     }
@@ -119,6 +122,17 @@ impl Default for TokenMeterApp {
 
 impl eframe::App for TokenMeterApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Load drag icon texture if not already loaded
+        if self.drag_icon_texture.is_none() {
+            if let Some(image_data) = self.load_drag_icon() {
+                self.drag_icon_texture = Some(ctx.load_texture(
+                    "drag_handle",
+                    image_data,
+                    egui::TextureOptions::default(),
+                ));
+            }
+        }
+        
         // process any UI messages from background
         while let Ok(msg) = self.ui_rx.try_recv() {
             match msg {
@@ -152,6 +166,16 @@ impl eframe::App for TokenMeterApp {
 }
 
 impl TokenMeterApp {
+    fn load_drag_icon(&self) -> Option<egui::ColorImage> {
+        let image_data = include_bytes!("../assets/icons/drag_handle.png");
+        let image = image::load_from_memory(image_data).ok()?;
+        let rgba = image.to_rgba8();
+        Some(egui::ColorImage::from_rgba_unmultiplied(
+            [rgba.width() as usize, rgba.height() as usize],
+            &rgba,
+        ))
+    }
+
     fn show_setup_window(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Token Meter Setup");
@@ -196,28 +220,29 @@ impl TokenMeterApp {
 
     fn show_main_widget(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Add a draggable header area
+            // Top row with drag icon on the right
             ui.horizontal(|ui| {
-                let drag_response = ui.add_sized(
-                    [ui.available_width(), 20.0],
-                    egui::Label::new("📊 Token Meter").sense(egui::Sense::click_and_drag()),
-                );
+                ui.add_space(ui.available_width() - 16.0); // Push icon to the right
+                
+                let drag_response = if let Some(texture) = &self.drag_icon_texture {
+                    ui.add(
+                        egui::Image::from_texture(texture)
+                            .fit_to_exact_size(egui::vec2(16.0, 16.0))
+                            .sense(egui::Sense::click_and_drag())
+                    )
+                } else {
+                    // Fallback to text if image not loaded
+                    ui.add_sized(
+                        [16.0, 16.0],
+                        egui::Label::new("⋮⋮").sense(egui::Sense::click_and_drag()),
+                    )
+                };
+                
                 if drag_response.drag_started() {
                     ctx.send_viewport_cmd(egui::viewport::ViewportCommand::StartDrag);
                 }
             });
             
-            ui.add_space(4.0);
-
-            ui.horizontal(|ui| {
-                if ui.button("📊 Refresh").clicked() {
-                    let api = self.api_key.clone();
-                    self.bg_tx.send(BgMessage::FetchMonthToDate { api_key: api }).ok();
-                }
-            });
-
-            ui.add_space(6.0);
-            ui.separator();
             ui.add_space(4.0);
 
             ui.label(format!("Status: {}", self.status));
@@ -226,6 +251,13 @@ impl TokenMeterApp {
             } else {
                 ui.label("MTD: --");
             }
+            
+            ui.horizontal(|ui| {
+                if ui.button("📊 Refresh").clicked() {
+                    let api = self.api_key.clone();
+                    self.bg_tx.send(BgMessage::FetchMonthToDate { api_key: api }).ok();
+                }
+            });
         });
     }
 }
@@ -235,8 +267,8 @@ fn main() -> Result<()> {
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([320.0, 200.0])
-            .with_min_inner_size([280.0, 150.0])
+            .with_inner_size([224.0, 150.0])
+            .with_min_inner_size([184.0, 120.0])
             .with_decorations(false)
             .with_always_on_top(),
         ..Default::default()
