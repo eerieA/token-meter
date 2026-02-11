@@ -210,22 +210,6 @@ impl TokenMeterApp {
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                ui.label("API key:");
-                ui.text_edit_singleline(&mut self.api_key);
-                if ui.button("💾").clicked() {
-                    if !self.api_key.is_empty() {
-                        if let Err(e) = save_api_key(&self.api_key) {
-                            self.status = format!("Failed: {}", e);
-                        } else {
-                            self.status = "Saved".into();
-                        }
-                    }
-                }
-            });
-
-            ui.add_space(4.0);
-
-            ui.horizontal(|ui| {
                 if ui.button("📊 Refresh").clicked() {
                     let api = self.api_key.clone();
                     self.bg_tx.send(BgMessage::FetchMonthToDate { api_key: api }).ok();
