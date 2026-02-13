@@ -1,0 +1,15 @@
+# This file defines permissions for custom application commands.
+
+[[permission]]
+identifier = "app-commands"
+description = "Allows invoking Token Meter custom backend commands"
+
+[permission.commands]
+allow = [
+  "move_window",
+  "get_api_key",
+  "get_cached_data",
+  "fetch_month_to_date",
+  "save_api_key_command"
+]
+deny = []

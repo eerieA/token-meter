@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Token Meter</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-app-region: drag;
+        }
+
+        .widget {
+            background: rgba(240, 240, 240, 0.5);
+            border-radius: 6px;
+            border: 1px solid rgb(180, 180, 180);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            height: 20px;
+            margin-bottom: 4px;
+        }
+
+        .drag-handle {
+            width: 16px;
+            height: 16px;
+            cursor: grab;
+            -webkit-app-region: drag;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cost {
+            font-size: 30px;
+            color: rgb(0, 255, 0);
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        .status {
+            font-size: 14px;
+            color: rgb(80, 80, 80);
+            margin-bottom: 4px;
+        }
+
+        .refresh-button {
+            background: rgb(59, 130, 246);
+            color: white;
+            border: none;
+            padding: 0px 2px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 14px;
+            align-self: flex-end;
+        }
+
+        .refresh-button:hover {
+            background: rgb(37, 99, 235);
+        }
+
+        .refresh-button:active {
+            background: rgb(29, 78, 216);
+        }
+    </style>
+</head>
+<body>
+    <div class="widget">
+        <div class="header">
+            <div class="drag-handle">⋮⋮</div>
+        </div>
+        <div class="content">
+            <div class="cost" id="cost">MTD: $12.34</div>
+            <div class="status" id="status">Status: Ready</div>
+            <button class="refresh-button" id="refresh-btn">Refresh</button>
+        </div>
+    </div>
+
+    <script>
+        const { invoke } = window.__TAURI__.core;
+
+        // State
+        let currentCost = null;
+        let currentStatus = 'Loading...';
+
+        // Elements
+        const costEl = document.getElementById('cost');
+        const statusEl = document.getElementById('status');
+        const refreshBtn = document.getElementById('refresh-btn');
+
+        // Initialize
+        async function init() {
+            console.log('init() called');
+            try {
+                // Check for saved API key
+                const hasApiKey = await invoke('get_api_key');
+                console.log('hasApiKey:', hasApiKey);
+                
+                if (hasApiKey) {
+                    // Load cached data
+                    const cachedData = await invoke('get_cached_data');
+                    console.log('cachedData:', cachedData);
+                    if (cachedData) {
+                        updateUI(cachedData.data, cachedData.status);
+                        currentCost = cachedData.data;
+                    } else {
+                        // Fetch fresh data
+                        console.log('No cache, fetching fresh data');
+                        fetchFreshData();
+                    }
+                } else {
+                    // Show setup
+                    console.log('No API key found');
+                    currentStatus = 'Setup required - no API key found';
+                    updateUI(null, currentStatus);
+                }
+            } catch (error) {
+                console.error('Init error:', error);
+                currentStatus = 'Error: ' + error;
+                updateUI(null, currentStatus);
+            }
+        }
+
+        function updateUI(cost, status) {
+            if (cost !== null) {
+                costEl.textContent = `MTD: $${parseFloat(cost).toFixed(2)}`;
+            } else {
+                costEl.textContent = 'MTD: --';
+            }
+            statusEl.textContent = `Status: ${status}`;
+            currentStatus = status;
+        }
+
+        async function fetchFreshData() {
+            console.log('fetchFreshData called');
+            try {
+                currentStatus = 'Fetching...';
+                updateUI(currentCost, currentStatus);
+                
+                const result = await invoke('fetch_month_to_date', { apiKey: await invoke('get_api_key') });
+                console.log('fetch_month_to_date result:', result);
+                
+                if (result.success) {
+                    currentCost = result.data;
+                    currentStatus = 'Fetched';
+                    updateUI(result.data, 'Fetched');
+                } else {
+                    currentStatus = 'Failed: ' + result.error;
+                    updateUI(currentCost, currentStatus);
+                }
+            } catch (error) {
+                console.error('fetchFreshData error:', error);
+                currentStatus = 'Error: ' + error;
+                updateUI(currentCost, currentStatus);
+            }
+        }
+
+        // Event listeners
+        refreshBtn.addEventListener('click', () => {
+            fetchFreshData();
+        });
+
+        // Drag functionality
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+
+        const widget = document.querySelector('.widget');
+        
+        widget.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.drag-handle')) {
+                isDragging = true;
+                dragOffset.x = e.clientX - widget.offsetLeft;
+                dragOffset.y = e.clientY - widget.offsetTop;
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const x = e.clientX - dragOffset.x;
+                const y = e.clientY - dragOffset.y;
+                
+                // Use Tauri command to move window
+                invoke('move_window', { x, y });
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        // Initialize app
+        console.log('Script loaded, calling init()');
+        init();
+    </script>
+</body>
+</html>

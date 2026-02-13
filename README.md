@@ -1,152 +1,152 @@
-# Token Meter
+%  Token Meter
 
-A lightweight Rust + egui application that monitors OpenAI API usage and costs in a borderless widget window.
+A lightweight token API usage & cost widget built with Rust + Tauri and a small HTML/CSS frontend.
 
-> Originally implemented using Pyside6; see branch legacy-pyside6.
+This repository is a migration from the previous Rust + egui implementation, which was preceded by a Pyside 6 implementation. the UI is now a tiny web-based widget (web/index.html) and the native layer is provided by Tauri.
+
+<!-- TOC -->
+
+- [Features](#features)
+- [Project structure](#project-structure)
+- [Storage / Configuration](#storage--configuration)
+- [Running / Building](#running--building)
+- [How the UI works](#how-the-ui-works)
+- [token API access requirements](#token-api-access-requirements)
+- [Cache & Fetch behavior](#cache--fetch-behavior)
+- [Development notes](#development-notes)
+- [Debugging](#debugging)
+- [Limitations & Future work](#limitations--future-work)
+
+<!-- /TOC -->
 
 ## Features
 
-- **Automatic Setup**: First-run setup wizard for API key configuration
-- **Smart Caching**: Local cache reduces API calls and improves responsiveness
-- **Real-time Updates**: Fetch current month-to-date usage from OpenAI API
-- **Secure Storage**: API key stored in `~/.token-meter/credentials.json`
-- **Background Processing**: Non-blocking UI with async background worker
-- **Retry Logic**: Built-in retry mechanism for network reliability
-- **Pagination**: Handles OpenAI API pagination automatically
+- Borderless, draggable widget window implemented with HTML/CSS
+- Minimal web-based UI (web/index.html) talking to native Rust commands via Tauri
+- Fetches month-to-date organization usage from the token API costs API
+- Local JSON cache to avoid unnecessary API calls (cache considered stale after 1 hour)
+- Retry & pagination logic for robust token API requests
+- Uses rust_decimal for accurate monetary aggregation
+- API key stored in the user's home directory (see Storage below)
 
-## Project Structure
+## Project structure
 
 ```
-src/
-├── main.rs              # Main egui application and UI state management
-├── providers/
-│   ├── mod.rs           # Provider module exports
-│   └── openai.rs       # OpenAI HTTP client with pagination & retries
-├── aggregator.rs        # High-level usage aggregation logic
-├── storage.rs          # Configuration and cache persistence
-└── domain.rs           # Data structures and type definitions
+.
+├── src/                 # Core Rust library code (providers, aggregator, storage, domain)
+├── src-tauri/           # Tauri app scaffolding and native entrypoint (build config, bundling)
+│   └── src/main.rs      # Tauri commands that the web UI invokes (move_window, fetch, cache, etc.)
+├── web/                 # Small web UI (HTML/CSS/JS) used as the Tauri frontend
+└── package.json         # npm scripts to run/build the Tauri app
 ```
 
-## How It Works
+Important Tauri commands exposed to the UI (see src-tauri/src/main.rs):
+- move_window(window, x, y) - move/position the native window
+- get_api_key() - returns saved API key or an error
+- get_cached_data() - returns cached MTD total if cache is still fresh
+- fetch_month_to_date(api_key) - fetches MTD total from token API and returns JSON result (and saves cache on success)
+- save_api_key_command(api_key) - writes the API key to disk
 
-### First Run Setup
-1. Launch the application - it detects if no API key is stored
-2. Enter your OpenAI admin API key in the setup window
-3. Click "Save & Start" - the key is stored securely and initial data is fetched
+## Storage / Configuration
 
-### Normal Operation
-- **Automatic Loading**: On startup, loads cached data if fresh (within 1 hour)
-- **Smart Refreshing**: Fetches new data if cache is outdated or missing
-- **Manual Refresh**: Click "📊 Refresh" to force update from API
-- **Persistent Storage**: Costs data cached in `~/.token-meter/api_usage.json`
+On first run the app needs an token API admin API key. The app stores configuration under a `.token-meter` directory in the user's home folder. Example locations:
 
-### Data Flow
-1. UI sends fetch request to background worker thread
-2. Background tokio runtime makes HTTP requests to OpenAI API
-3. Results are sent back to UI via channels
-4. UI updates display and saves data to cache
-5. Cache persists across app restarts
+- Unix/macOS: ~/.token-meter/
+- Windows: C:\Users\<you>\.token-meter\
 
-## Installation & Running
-
-### Prerequisites
-- Rust toolchain (latest stable recommended)
-
-### Build & Run
-```bash
-# Clone and navigate to project
-cd token-meter
-
-# Run in debug mode
-cargo run
-
-# Or build optimized release
-cargo run --release
-```
-
-### Configuration Files
-The app creates a `.token-meter` directory in user home folder:
+Files created:
 
 ```
 ~/.token-meter/
-├── credentials.json    # Stored API key
-└── api_usage.json    # Cached usage data with timestamps
+├── credentials.json    # { "openai_api_key": "..." }
+└── api_usage.json      # cached data, timestamps, baseline info
 ```
 
-> Similarly on Windows the files are stored in `%APPDATA%/token-meter`
+Note: the code uses the user's home directory for storage (env::home_dir()).
 
-## API Requirements
+## Running / Building
 
-- **OpenAI Admin API Key**: Required to access organization usage data
-- **Permissions**: Must have organization usage read permissions
+Prerequisites:
+- Rust toolchain (stable)
+- Node.js + npm
 
-## UI Components
+Quick start (development):
 
-### Main Widget
-- **Draggable Header**: Click and drag to move the window
-- **Usage Display**: Shows month-to-date total cost
-- **Status Indicator**: Current operation status (Loading, Fetched, etc.)
-- **Refresh Button**: Force update from OpenAI API
+Option A - standard Tauri workflow via npm (recommended):
 
-### Setup Window (First Run Only)
-- **API Key Input**: Secure text field for your OpenAI admin key
-- **Save & Start**: Stores key and transitions to main widget
-- **Cancel**: Close the application
+```bash
+%  Install JS deps
+npm install
 
-## Technical Details
+%  Run the app in dev mode (this runs the Tauri dev workflow)
+npm run dev
+```
 
-### Caching System
-- **Cache Duration**: 1 hour before considered outdated
-- **Cache Format**: JSON with timestamps for validation
-- **Automatic Updates**: Cache updated on every successful fetch
+Option B - using the cargo-tauri commands directly:
 
-### Error Handling
-- **Network Retries**: Automatic retry logic for failed requests
-- **Graceful Degradation**: Shows cached data if API is unavailable
-- **User Feedback**: Clear status messages for all operations
+```bash
+%  If you don't have the tauri CLI installed, install it first
+cargo install tauri-cli
 
-### Performance Optimizations
-- **Background Threading**: Non-blocking UI operations
-- **Decimal Precision**: Uses `rust_decimal` for accurate monetary calculations
+%  Run the app in dev mode (hot-reloads frontend and native)
+cargo tauri dev
+```
 
-## Development Notes
+Build for release:
 
-### Architecture Decisions
-- **egui**: Immediate mode GUI for simplicity and performance
-- **tokio**: Async runtime for efficient network operations
-- **reqwest**: HTTP client with TLS support
-- **serde**: JSON serialization for API responses and cache
+Option A - via npm (uses the local Tauri CLI):
 
-### Security Considerations
-- API key stored in user home directory (not in application directory)
-- No API key display in main UI after setup
-- Plain text storage (acceptable for personal utility application)
+```bash
+npm run build
+%  The produced bundles are in src-tauri/target/release/bundle (platform-dependent)
+```
 
-## Limitations
+Option B - with cargo-tauri directly:
 
-- No system tray integration
-- No automatic periodic refresh (manual refresh only)
-- No baseline credit tracking (storage helpers available)
-- Windows/Linux only (tested platforms)
+```bash
+%  Produce release bundles using the tauri CLI
+cargo tauri build
+%  Bundles will appear under src-tauri/target/release/bundle (platform-dependent)
+```
 
-## Future Enhancements
+`npm run dev` is convenient when working on the web frontend; `cargo tauri dev` is useful if you prefer invoking the native tooling directly.
 
-- **System Tray**: Background operation with tray icon
-- **Auto-refresh**: Configurable automatic update intervals
-- **Baseline Tracking**: Compare usage against allocated credits
-- **Multiple Providers**: Support for other AI service providers
-- **Usage History**: Track usage trends over time
+## How the UI works
 
-## Troubleshooting
+The web UI (web/index.html) is intentionally minimal. It:
+- Invokes Tauri commands to read/save the API key and to fetch cached or fresh usage
+- Displays MTD (month-to-date) cost and a status line
+- Allows manual refresh via a button
+- Implements dragging using a small drag-handle and the move_window Tauri command
 
-### Common Issues
-1. **"Failed to save API key"**: Check write permissions to home directory
-2. **"Failed to fetch"**: Verify API key has organization access
-3. **No data showing**: Check internet connection and API key validity
+## token API access requirements
 
-### Debug Information
-Run with `RUST_LOG=debug cargo run` to see detailed logging.
+- An admin API key that can read organization costs/usage is required.
 
-## License
+## Cache & Fetch behavior
 
-This project maintains the same license as the original token-meter application.
+- Cache is considered fresh for 1 hour. If cache is fresh, the UI will show cached data on startup.
+- fetch_month_to_date will query the token API organization costs endpoint, handling pagination and retry/backoff for transient errors.
+- On successful fetch the native code saves the total to api_usage.json so subsequent starts can display cached data quickly.
+
+## Development notes
+
+- Network requests use reqwest; async code uses tokio
+- Monetary aggregation uses rust_decimal to avoid floating-point rounding errors
+- Errors and transient HTTP failures are retried with exponential backoff (see providers/openai.rs)
+
+## Debugging
+
+You can enable more verbose Rust logging with:
+
+```bash
+RUST_LOG=debug npm run dev
+```
+
+Or run the Rust binary directly with RUST_LOG set.
+
+## Limitations & Future work
+
+- No system tray integration yet
+- No automatic periodic refresh (refresh is manual)
+- No multi-provider UI (the code is structured to add other providers)
