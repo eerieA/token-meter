@@ -27,6 +27,12 @@
             box-sizing: border-box;
         }
 
+        #normal-display {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
         .header {
             display: flex;
             justify-content: flex-end;
@@ -89,6 +95,64 @@
         .refresh-button:active {
             background: rgb(100, 100, 100);
         }
+
+        .setup-container {
+            display: none;
+            flex-direction: column;
+            padding: 8px;
+        }
+
+        .setup-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: rgb(80, 80, 80);
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .setup-input {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid rgb(189, 201, 200);
+            border-radius: 2px;
+            font-size: 12px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .setup-button {
+            background: rgb(80, 80, 80);
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 12px;
+            align-self: center;
+        }
+
+        .setup-button:hover {
+            background: rgb(100, 100, 100);
+        }
+
+        .setup-button:disabled {
+            background: rgb(150, 150, 150);
+            cursor: not-allowed;
+        }
+
+        .setup-error {
+            font-size: 11px;
+            color: rgb(200, 50, 50);
+            margin-top: 4px;
+            text-align: center;
+        }
+
+        .setup-success {
+            font-size: 11px;
+            color: rgb(50, 200, 50);
+            margin-top: 4px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -97,9 +161,24 @@
             <div class="drag-handle">⋮⋮</div>
         </div> -->
         <div class="content">
-            <div class="cost" id="cost">MTD: $12.34</div>
-            <div class="status" id="status">Status: Ready</div>
-            <button class="refresh-button" id="refresh-btn">Refresh</button>
+            <!-- Normal Display -->
+            <div id="normal-display">
+                <div class="cost" id="cost">MTD: $12.34</div>
+                <div class="status" id="status">Status: Ready</div>
+                <button class="refresh-button" id="refresh-btn">Refresh</button>
+            </div>
+            
+            <!-- Setup Display -->
+            <div class="setup-container" id="setup-container">
+                <div class="setup-title">Setup Required</div>
+                <form id="api-key-form" onsubmit="return false;">
+                    <input type="text" name="username" autocomplete="username" style="display: none;">
+                    <input type="password" class="setup-input" id="api-key-input" placeholder="Enter OpenAI API Key" autocomplete="new-password">
+                    <button type="submit" class="setup-button" id="save-api-btn">Save & Start</button>
+                </form>
+                <div class="setup-error" id="setup-error" style="display: none;"></div>
+                <div class="setup-success" id="setup-success" style="display: none;"></div>
+            </div>
         </div>
     </div>
 
@@ -115,16 +194,23 @@
         const costEl = document.getElementById('cost');
         const statusEl = document.getElementById('status');
         const refreshBtn = document.getElementById('refresh-btn');
+        const normalDisplay = document.getElementById('normal-display');
+        const setupContainer = document.getElementById('setup-container');
+        const apiKeyForm = document.getElementById('api-key-form');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const saveApiBtn = document.getElementById('save-api-btn');
+        const setupError = document.getElementById('setup-error');
+        const setupSuccess = document.getElementById('setup-success');
 
         // Initialize
         async function init() {
             console.log('init() called');
             try {
                 // Check for saved API key
-                const hasApiKey = await invoke('get_api_key');
-                console.log('hasApiKey:', hasApiKey);
+                const apiKeyResult = await invoke('get_api_key');
+                console.log('apiKeyResult:', apiKeyResult);
                 
-                if (hasApiKey) {
+                if (apiKeyResult) {
                     // Load cached data
                     const cachedData = await invoke('get_cached_data');
                     console.log('cachedData:', cachedData);
@@ -140,10 +226,9 @@
                     startAutoRefresh();
                     updateUI(currentCost, currentStatus);
                 } else {
-                    // Show setup
+                    // Show setup UI
                     console.log('No API key found');
-                    currentStatus = 'Setup required - no API key found';
-                    updateUI(null, currentStatus);
+                    showSetupUI();
                 }
             } catch (error) {
                 console.error('Init error:', error);
@@ -185,6 +270,69 @@
             }
         }
 
+        function showSetupUI() {
+            normalDisplay.style.display = 'none';
+            setupContainer.style.display = 'flex';
+            setupError.style.display = 'none';
+            setupSuccess.style.display = 'none';
+            apiKeyInput.value = '';
+            apiKeyInput.focus();
+        }
+
+        function showNormalUI() {
+            normalDisplay.style.display = 'flex';
+            setupContainer.style.display = 'none';
+        }
+
+        function showSetupError(message) {
+            setupError.textContent = message;
+            setupError.style.display = 'block';
+            setupSuccess.style.display = 'none';
+        }
+
+        function showSetupSuccess(message) {
+            setupSuccess.textContent = message;
+            setupSuccess.style.display = 'block';
+            setupError.style.display = 'none';
+        }
+
+        async function saveApiKey() {
+            const apiKey = apiKeyInput.value.trim();
+            
+            if (!apiKey) {
+                showSetupError('Please enter an API key');
+                return;
+            }
+
+            saveApiBtn.disabled = true;
+            saveApiBtn.textContent = 'Validating...';
+
+            try {
+                // Validate the API key first
+                const validation = await invoke('validate_api_key', { apiKey });
+                
+                if (validation.success) {
+                    // Save the API key
+                    await invoke('save_api_key_command', { apiKey });
+                    showSetupSuccess('API key saved successfully!');
+                    
+                    // Wait a moment then switch to normal UI
+                    setTimeout(async () => {
+                        showNormalUI();
+                        await init(); // Re-initialize with the new API key
+                    }, 1000);
+                } else {
+                    showSetupError('Invalid API key: ' + validation.error);
+                }
+            } catch (error) {
+                console.error('Save API key error:', error);
+                showSetupError('Error saving API key: ' + error);
+            } finally {
+                saveApiBtn.disabled = false;
+                saveApiBtn.textContent = 'Save & Start';
+            }
+        }
+
         async function fetchFreshData() {
             console.log('fetchFreshData called');
             try {
@@ -212,6 +360,13 @@
         // Event listeners
         refreshBtn.addEventListener('click', () => {
             fetchFreshData();
+        });
+
+        // Setup UI event listeners
+        saveApiBtn.addEventListener('click', saveApiKey);
+        apiKeyForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            saveApiKey();
         });
 
         // Drag functionality
@@ -245,6 +400,10 @@
 
         // Initialize app
         console.log('Script loaded, calling init()');
+        
+        // Ensure normal display is shown initially
+        showNormalUI();
+        
         init();
 
         // Cleanup auto-refresh when page unloads

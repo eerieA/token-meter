@@ -21,8 +21,8 @@ async fn move_window(window: tauri::Window, x: f64, y: f64) -> Result<(), String
 }
 
 #[tauri::command]
-async fn get_api_key() -> Result<String, String> {
-  load_api_key().ok_or_else(|| "API key not set".to_string())
+async fn get_api_key() -> Result<Option<String>, String> {
+  Ok(load_api_key())
 }
 
 #[tauri::command]
@@ -69,6 +69,21 @@ async fn fetch_month_to_date(api_key: String) -> Result<serde_json::Value, Strin
 }
 
 #[tauri::command]
+async fn validate_api_key(api_key: String) -> Result<serde_json::Value, String> {
+  let agg = aggregator::UsageAggregator::new(&api_key);
+  match agg.fetch_month_to_date().await {
+    Ok(_) => Ok(serde_json::json!({
+      "success": true,
+      "message": "API key is valid"
+    })),
+    Err(e) => Ok(serde_json::json!({
+      "success": false,
+      "error": e.to_string()
+    })),
+  }
+}
+
+#[tauri::command]
 fn save_api_key_command(api_key: String) -> Result<(), String> {
   save_api_key(&api_key).map_err(|e| e.to_string())
 }
@@ -80,6 +95,7 @@ fn main() {
       get_api_key,
       get_cached_data,
       fetch_month_to_date,
+      validate_api_key,
       save_api_key_command,
     ])
     .setup(|app| {
