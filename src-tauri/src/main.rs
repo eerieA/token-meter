@@ -8,6 +8,7 @@ mod storage;
 mod domain;
 
 use storage::{is_cache_outdated, load_api_key, load_cache, save_api_key, save_cache};
+use tauri::Manager;
 
 #[tauri::command]
 async fn move_window(window: tauri::Window, x: f64, y: f64) -> Result<(), String> {
@@ -81,6 +82,15 @@ fn main() {
       fetch_month_to_date,
       save_api_key_command,
     ])
+    .setup(|app| {
+      // Open dev tools automatically in debug mode
+      #[cfg(debug_assertions)]
+      {
+        let window = app.get_webview_window("main").unwrap();
+        window.open_devtools();
+      }
+      Ok(())
+    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

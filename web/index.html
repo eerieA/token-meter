@@ -18,7 +18,7 @@
         .widget {
             background: rgba(240, 240, 240, 0.5);
             border-radius: 6px;
-            border: 1px solid rgb(180, 180, 180);
+            border: 1px solid rgba(189, 201, 200, 0.3);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             backdrop-filter: blur(10px);
             display: flex;
@@ -59,9 +59,10 @@
 
         .cost {
             font-size: 30px;
-            color: rgb(0, 255, 0);
+            color: #80d755;
             margin-bottom: 4px;
             font-weight: bold;
+            text-shadow: -1px 1px 2px rgba(189, 201, 200, 0.8);
         }
 
         .status {
@@ -71,7 +72,7 @@
         }
 
         .refresh-button {
-            background: rgb(59, 130, 246);
+            background: rgb(80, 80, 80);
             color: white;
             border: none;
             padding: 0px 2px;
@@ -82,19 +83,19 @@
         }
 
         .refresh-button:hover {
-            background: rgb(37, 99, 235);
+            background: rgb(100, 100, 100);
         }
 
         .refresh-button:active {
-            background: rgb(29, 78, 216);
+            background: rgb(100, 100, 100);
         }
     </style>
 </head>
 <body>
     <div class="widget">
-        <div class="header">
+        <!-- <div class="header">
             <div class="drag-handle">⋮⋮</div>
-        </div>
+        </div> -->
         <div class="content">
             <div class="cost" id="cost">MTD: $12.34</div>
             <div class="status" id="status">Status: Ready</div>
