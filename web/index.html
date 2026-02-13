@@ -109,6 +109,7 @@
         // State
         let currentCost = null;
         let currentStatus = 'Loading...';
+        let autoRefreshInterval = null;
 
         // Elements
         const costEl = document.getElementById('cost');
@@ -133,8 +134,11 @@
                     } else {
                         // Fetch fresh data
                         console.log('No cache, fetching fresh data');
-                        fetchFreshData();
+                        await fetchFreshData();
                     }
+                    // Start auto-refresh after successful initialization
+                    startAutoRefresh();
+                    updateUI(currentCost, currentStatus);
                 } else {
                     // Show setup
                     console.log('No API key found');
@@ -154,8 +158,31 @@
             } else {
                 costEl.textContent = 'MTD: --';
             }
-            statusEl.textContent = `Status: ${status}`;
+            
+            // Add auto-refresh indicator to status
+            const autoRefreshIndicator = autoRefreshInterval ? ' (Auto: ON)' : '';
+            statusEl.textContent = `Status: ${status}${autoRefreshIndicator}`;
             currentStatus = status;
+        }
+
+        function startAutoRefresh() {
+            // Clear any existing interval
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            
+            // Set up auto-refresh every 3 minutes (180,000 ms)
+            autoRefreshInterval = setInterval(async () => {
+                console.log('Auto-refresh triggered');
+                await fetchFreshData();
+            }, 180000);
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
         }
 
         async function fetchFreshData() {
@@ -219,6 +246,11 @@
         // Initialize app
         console.log('Script loaded, calling init()');
         init();
+
+        // Cleanup auto-refresh when page unloads
+        window.addEventListener('beforeunload', () => {
+            stopAutoRefresh();
+        });
     </script>
 </body>
 </html>

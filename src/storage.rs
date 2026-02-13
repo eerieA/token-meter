@@ -91,7 +91,7 @@ pub fn is_cache_outdated() -> bool {
             match chrono::DateTime::parse_from_rfc3339(&fetched_at) {
                 Ok(dt) => {
                     let cache_age = chrono::Utc::now() - chrono::DateTime::from_naive_utc_and_offset(dt.naive_utc(), chrono::Utc);
-                    cache_age.num_hours() >= 1 // Cache is outdated after 1 hour
+                    cache_age.num_minutes() >= 3 // Cache is outdated after 3 minutes
                 }
                 Err(_) => true, // Invalid timestamp, treat as outdated
             }
