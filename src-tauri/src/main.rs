@@ -7,7 +7,7 @@ mod storage;
 #[path = "../../src/domain.rs"]
 mod domain;
 
-use storage::{is_cache_outdated, load_api_key, load_cache, save_api_key, save_cache, save_baseline, clear_baseline};
+use storage::{is_cache_outdated, load_api_key, load_cache, save_api_key, save_cache, save_baseline, clear_baseline, save_baseline_cache};
 use tauri::Manager;
 
 #[tauri::command]
@@ -30,25 +30,39 @@ async fn get_cached_data() -> Result<Option<serde_json::Value>, String> {
   match load_cache() {
     Some(cache) => {
       if !is_cache_outdated() {
-        if let Some(total) = cache.openai_total {
-          // Include baseline info if present so the UI can show baseline metadata without hitting the network
-          if let Some(b) = cache.baseline {
-            Ok(Some(serde_json::json!({
-              "success": true,
-              "data": total,
-              "baseline": {
-                "amount": b.amount,
-                "start_iso": b.start_iso
-              },
-              "status": "From cache"
-            })))
-          } else {
-            Ok(Some(serde_json::json!({
-              "success": true,
-              "data": total,
-              "status": "From cache"
-            })))
+        // If baseline metadata exists, prefer returning baseline-related cached values
+        if let Some(b) = &cache.baseline {
+          let mut baseline_obj = serde_json::json!({
+            "amount": b.amount,
+            "start_iso": b.start_iso
+          });
+          if let Some(used) = &cache.baseline_used {
+            baseline_obj["used"] = serde_json::Value::String(used.clone());
           }
+          if let Some(rem) = &cache.baseline_remaining {
+            baseline_obj["remaining"] = serde_json::Value::String(rem.clone());
+          }
+          // Choose data to return: prefer baseline_remaining if present, otherwise openai_total if present
+          let data_value = if let Some(ref rem) = cache.baseline_remaining {
+            serde_json::Value::String(rem.clone())
+          } else if let Some(ref total) = cache.openai_total {
+            serde_json::Value::String(total.clone())
+          } else {
+            serde_json::Value::Null
+          };
+
+          Ok(Some(serde_json::json!({
+            "success": true,
+            "data": data_value,
+            "baseline": baseline_obj,
+            "status": "From cache"
+          })))
+        } else if let Some(total) = cache.openai_total {
+          Ok(Some(serde_json::json!({
+            "success": true,
+            "data": total,
+            "status": "From cache"
+          })))
         } else {
           Ok(None)
         }
@@ -72,12 +86,20 @@ async fn fetch_month_to_date(api_key: String) -> Result<serde_json::Value, Strin
         Ok(dt) => {
           let start_ts = dt.with_timezone(&chrono::Utc).timestamp();
           let end_ts = chrono::Utc::now().timestamp();
-          match agg.fetch_since(start_ts, Some(end_ts)).await {
+          eprintln!("[main] fetch_month_to_date: using baseline branch start_ts={} end_ts={} (passing end_time=None to provider to include latest bucket)", start_ts, end_ts);
+          // Pass None as end_time to provider so it can decide the appropriate upper bound
+          match agg.fetch_since(start_ts, None).await {
             Ok(used) => {
               // parse baseline amount
               match rust_decimal::Decimal::from_str_exact(&baseline.amount) {
                 Ok(bamount) => {
                   let remaining = bamount - used;
+                  // Save baseline-specific aggregates (used & remaining) without overwriting openai_total
+                  if let Err(e) = save_baseline_cache(&used, &remaining) {
+                    eprintln!("Failed to save baseline cache: {}", e);
+                  } else {
+                    eprintln!("[main] baseline cache saved (used={}, remaining={})", used, remaining);
+                  }
                   Ok(serde_json::json!({
                     "success": true,
                     "data": remaining.to_string(),
@@ -103,11 +125,14 @@ async fn fetch_month_to_date(api_key: String) -> Result<serde_json::Value, Strin
       }
     } else {
       // No baseline: default month-to-date behavior
+      eprintln!("[main] fetch_month_to_date: no baseline, calling month-to-date provider");
       match agg.fetch_month_to_date().await {
         Ok(total) => {
           // Save to cache after successful fetch
           if let Err(e) = save_cache(&total) {
             eprintln!("Failed to save cache: {}", e);
+          } else {
+            eprintln!("[main] cache saved successfully (openai_total={})", total);
           }
           Ok(serde_json::json!({
             "success": true,

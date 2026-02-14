@@ -6,7 +6,7 @@
 **/*.rs.bk
 
 # Keep Cargo.lock for applications (recommended)
-# If this were a library, you would ignore it.
+# If this were a library, we would ignore it.
 # !Cargo.lock
 
 # =========================
@@ -71,7 +71,7 @@ Thumbs.db
 desktop.ini
 
 # =========================
-# Flycheck (you have this)
+# Flycheck
 # =========================
 
 /flycheck0/

@@ -18,6 +18,7 @@ impl UsageAggregator {
         let now = Utc::now();
         let start_of_month = Utc.ymd_opt(now.year(), now.month(), 1).single().unwrap().and_hms_opt(0, 0, 0).unwrap();
         let start_ts = start_of_month.timestamp();
+        eprintln!("[aggregator] fetch_month_to_date: start_ts={}", start_ts);
         let amounts = self
             .provider
             .fetch_costs(start_ts, None, true)
@@ -25,22 +26,25 @@ impl UsageAggregator {
             .context("fetching costs from provider")?;
 
         let mut total = Decimal::ZERO;
-        for a in amounts {
-            total += a;
+        for a in &amounts {
+            total += a.clone();
         }
+        eprintln!("[aggregator] fetch_month_to_date: fetched {} buckets, total={}", amounts.len(), total);
         Ok(total)
     }
 
     pub async fn fetch_since(&self, start_ts: i64, end_ts: Option<i64>) -> Result<Decimal> {
+        eprintln!("[aggregator] fetch_since: start_ts={} end_ts={:?}", start_ts, end_ts);
         let amounts = self
             .provider
             .fetch_costs(start_ts, end_ts, true)
             .await
             .context("fetching costs since")?;
         let mut total = Decimal::ZERO;
-        for a in amounts {
-            total += a;
+        for a in &amounts {
+            total += a.clone();
         }
+        eprintln!("[aggregator] fetch_since: fetched {} buckets, total={}", amounts.len(), total);
         Ok(total)
     }
 }

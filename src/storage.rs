@@ -10,6 +10,9 @@ pub struct CacheData {
     pub openai_total: Option<String>,
     pub fetched_at: Option<String>,
     pub baseline: Option<Baseline>,
+    // Preserve baseline-specific aggregates separately
+    pub baseline_used: Option<String>,
+    pub baseline_remaining: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,13 +62,39 @@ pub fn save_cache(total: &Decimal) -> Result<()> {
     let mut data = load_cache().unwrap_or(CacheData { 
         openai_total: None, 
         fetched_at: None, 
-        baseline: None 
+        baseline: None,
+        baseline_used: None,
+        baseline_remaining: None,
     });
     
-    // Update the cache data
+    // Update the cache data for month-to-date
     data.openai_total = Some(total.to_string());
     data.fetched_at = Some(chrono::Utc::now().to_rfc3339());
     
+    fs::write(&p, serde_json::to_string_pretty(&data)?).context("writing cache file")?;
+    Ok(())
+}
+
+// New helper: save baseline-specific cached values (used & remaining)
+// This will update baseline_used and baseline_remaining and fetched_at,
+// but intentionally will NOT overwrite openai_total.
+pub fn save_baseline_cache(used: &Decimal, remaining: &Decimal) -> Result<()> {
+    let mut p = base_dir().context("cannot find config dir")?;
+    fs::create_dir_all(&p).ok();
+    p.push("api_usage.json");
+
+    let mut data = load_cache().unwrap_or(CacheData {
+        openai_total: None,
+        fetched_at: None,
+        baseline: None,
+        baseline_used: None,
+        baseline_remaining: None,
+    });
+
+    data.baseline_used = Some(used.to_string());
+    data.baseline_remaining = Some(remaining.to_string());
+    data.fetched_at = Some(chrono::Utc::now().to_rfc3339());
+
     fs::write(&p, serde_json::to_string_pretty(&data)?).context("writing cache file")?;
     Ok(())
 }
@@ -86,12 +115,15 @@ pub fn load_cache() -> Option<CacheData> {
 }
 
 pub fn is_cache_outdated() -> bool {
+    // Determine whether the saved cache is older than the configured threshold (3 minutes)
     if let Some(cache) = load_cache() {
         if let Some(fetched_at) = cache.fetched_at {
             match chrono::DateTime::parse_from_rfc3339(&fetched_at) {
-                Ok(dt) => {
-                    let cache_age = chrono::Utc::now() - chrono::DateTime::from_naive_utc_and_offset(dt.naive_utc(), chrono::Utc);
-                    cache_age.num_minutes() >= 3 // Cache is outdated after 3 minutes
+                Ok(dt_fixed) => {
+                    // Convert parsed datetime (with offset) to Utc explicitly and compute duration
+                    let dt_utc = dt_fixed.with_timezone(&chrono::Utc);
+                    let age = chrono::Utc::now().signed_duration_since(dt_utc);
+                    age >= chrono::Duration::minutes(3)
                 }
                 Err(_) => true, // Invalid timestamp, treat as outdated
             }
@@ -108,8 +140,11 @@ pub fn save_baseline(amount: &str, start_iso: &str) -> Result<()> {
     fs::create_dir_all(&p).ok();
     p.push("api_usage.json");
     // load existing
-    let mut data = load_cache().unwrap_or(CacheData { openai_total: None, fetched_at: None, baseline: None });
+    let mut data = load_cache().unwrap_or(CacheData { openai_total: None, fetched_at: None, baseline: None, baseline_used: None, baseline_remaining: None });
     data.baseline = Some(Baseline { amount: amount.to_string(), start_iso: start_iso.to_string() });
+    // Clear previous baseline aggregate values so a fresh fetch recomputes them
+    data.baseline_used = None;
+    data.baseline_remaining = None;
     fs::write(&p, serde_json::to_string_pretty(&data)?).context("writing cache file")?;
     Ok(())
 }
@@ -119,8 +154,10 @@ pub fn clear_baseline() -> Result<()> {
     fs::create_dir_all(&p).ok();
     p.push("api_usage.json");
     // load existing
-    let mut data = load_cache().unwrap_or(CacheData { openai_total: None, fetched_at: None, baseline: None });
+    let mut data = load_cache().unwrap_or(CacheData { openai_total: None, fetched_at: None, baseline: None, baseline_used: None, baseline_remaining: None });
     data.baseline = None;
+    data.baseline_used = None;
+    data.baseline_remaining = None;
     fs::write(&p, serde_json::to_string_pretty(&data)?).context("writing cache file")?;
     Ok(())
 }
