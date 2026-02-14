@@ -154,6 +154,40 @@
             margin-top: 4px;
             text-align: center;
         }
+
+        /* Baseline modal backdrop and panel */
+        #baseline-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+        }
+
+        #baseline-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(2px);
+        }
+
+        #baseline-modal-panel {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            /* make the modal a little smaller than the normal UI and responsive */
+            width: min(85%, 180px);
+            max-width: 90vw;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            box-sizing: border-box;
+            /* prevent the modal from being cut off on short windows */
+            max-height: calc(100vh - 20px);
+            overflow-y: auto;
+            -webkit-app-region: no-drag;
+            /* allow interacting with modal inputs */
+        }
     </style>
 </head>
 
@@ -175,18 +209,7 @@
                     <div class="status" id="status">Status: Ready</div>
                 </div>
 
-                <!-- Inline Baseline Form (hidden by default) -->
-                <div id="baseline-form" style="display:none; margin-top:6px;">
-                    <input type="number" id="baseline-amount" class="setup-input"
-                        placeholder="Baseline amount (e.g. 5.10)" step="0.01" min="0">
-                    <input type="date" id="baseline-date" class="setup-input" placeholder="Start date">
-                    <div style="display:flex; gap:6px;">
-                        <button class="setup-button" id="save-baseline-btn">Save Baseline</button>
-                        <button class="setup-button" id="clear-baseline-btn">Clear Baseline</button>
-                    </div>
-                    <div class="setup-error" id="baseline-error" style="display:none"></div>
-                    <div class="setup-success" id="baseline-success" style="display:none"></div>
-                </div>
+
             </div>
 
             <!-- Setup Display -->
@@ -204,6 +227,30 @@
         </div>
     </div>
 
+
+    <!-- Baseline Modal -->
+    <div id="baseline-modal" style="display:none;" aria-hidden="true">
+        <div id="baseline-modal-backdrop"></div>
+        <div id="baseline-modal-panel" role="dialog" aria-modal="true" aria-labelledby="baseline-modal-title">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div id="baseline-modal-title" style="font-weight:600;">Set Baseline Credit</div>
+                <button id="baseline-modal-close"
+                    style="background:transparent;border:none;font-size:16px;cursor:pointer;">✕</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <input type="number" id="modal-baseline-amount" class="setup-input"
+                    placeholder="Baseline amount (e.g. 5.10)" step="0.01" min="0">
+                <input type="date" id="modal-baseline-date" class="setup-input">
+                <div style="display:flex; gap:6px;">
+                    <button class="setup-button" id="modal-save-baseline-btn">Save Baseline</button>
+                    <button class="setup-button" id="modal-clear-baseline-btn">Clear Baseline</button>
+                </div>
+                <div class="setup-error" id="modal-baseline-error" style="display:none"></div>
+                <div class="setup-success" id="modal-baseline-success" style="display:none"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const { invoke } = window.__TAURI__.core;
 
@@ -217,13 +264,15 @@
         const statusEl = document.getElementById('status');
         const refreshBtn = document.getElementById('refresh-btn');
         const baselineToggleBtn = document.getElementById('baseline-toggle-btn');
-        const baselineForm = document.getElementById('baseline-form');
-        const baselineAmountInput = document.getElementById('baseline-amount');
-        const baselineDateInput = document.getElementById('baseline-date');
-        const saveBaselineBtn = document.getElementById('save-baseline-btn');
-        const clearBaselineBtn = document.getElementById('clear-baseline-btn');
-        const baselineError = document.getElementById('baseline-error');
-        const baselineSuccess = document.getElementById('baseline-success');
+        const baselineModal = document.getElementById('baseline-modal');
+        const modalBackdrop = document.getElementById('baseline-modal-backdrop');
+        const modalCloseBtn = document.getElementById('baseline-modal-close');
+        const modalAmountInput = document.getElementById('modal-baseline-amount');
+        const modalDateInput = document.getElementById('modal-baseline-date');
+        const modalSaveBtn = document.getElementById('modal-save-baseline-btn');
+        const modalClearBtn = document.getElementById('modal-clear-baseline-btn');
+        const modalError = document.getElementById('modal-baseline-error');
+        const modalSuccess = document.getElementById('modal-baseline-success');
         const normalDisplay = document.getElementById('normal-display');
         const setupContainer = document.getElementById('setup-container');
         const apiKeyForm = document.getElementById('api-key-form');
@@ -408,73 +457,101 @@
             fetchFreshData();
         });
 
-        // Baseline UI handlers
-        baselineToggleBtn.addEventListener('click', () => {
-            if (baselineForm.style.display === 'none') {
-                baselineForm.style.display = 'block';
-                // Pre-fill with today's date
-                const today = new Date().toISOString().slice(0, 10);
-                baselineDateInput.value = today;
-                baselineError.style.display = 'none';
-                baselineSuccess.style.display = 'none';
-            } else {
-                baselineForm.style.display = 'none';
+        // Baseline UI handlers (modal)
+        baselineToggleBtn.addEventListener('click', async () => {
+            try {
+                const cached = await invoke('get_cached_data');
+                if (cached && cached.baseline && cached.baseline.amount) {
+                    modalAmountInput.value = cached.baseline.amount;
+                    if (cached.baseline.start_iso) {
+                        modalDateInput.value = cached.baseline.start_iso.slice(0, 10);
+                    }
+                } else {
+                    modalAmountInput.value = '';
+                    modalDateInput.value = new Date().toISOString().slice(0, 10);
+                }
+            } catch (e) {
+                modalAmountInput.value = '';
+                modalDateInput.value = new Date().toISOString().slice(0, 10);
+            }
+            modalError.style.display = 'none';
+            modalSuccess.style.display = 'none';
+            baselineModal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            modalAmountInput.focus();
+            modalAmountInput.select();
+        });
+
+        // close handlers
+        modalBackdrop.addEventListener('click', () => {
+            baselineModal.style.display = 'none';
+            document.body.style.overflow = '';
+        });
+        modalCloseBtn.addEventListener('click', () => {
+            baselineModal.style.display = 'none';
+            document.body.style.overflow = '';
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && baselineModal.style.display === 'block') {
+                baselineModal.style.display = 'none';
+                document.body.style.overflow = '';
             }
         });
 
-        saveBaselineBtn.addEventListener('click', async () => {
-            const amount = baselineAmountInput.value.trim();
-            const date = baselineDateInput.value;
-            baselineError.style.display = 'none';
-            baselineSuccess.style.display = 'none';
-
+        modalSaveBtn.addEventListener('click', async () => {
+            const amount = modalAmountInput.value.trim();
+            const date = modalDateInput.value;
+            modalError.style.display = 'none';
+            modalSuccess.style.display = 'none';
             if (!amount || isNaN(parseFloat(amount))) {
-                baselineError.textContent = 'Please enter a valid baseline amount';
-                baselineError.style.display = 'block';
+                modalError.textContent = 'Please enter a valid baseline amount';
+                modalError.style.display = 'block';
                 return;
             }
             if (!date) {
-                baselineError.textContent = 'Please select a baseline start date';
-                baselineError.style.display = 'block';
+                modalError.textContent = 'Please select a baseline start date';
+                modalError.style.display = 'block';
                 return;
             }
-
-            // Build RFC3339 start ISO (midnight UTC)
             const startIso = `${date}T00:00:00Z`;
-            saveBaselineBtn.disabled = true;
-            saveBaselineBtn.textContent = 'Saving...';
+            modalSaveBtn.disabled = true;
+            modalSaveBtn.textContent = 'Saving...';
             try {
                 await invoke('save_baseline_command', { amount, startIso });
-                baselineSuccess.textContent = 'Baseline saved';
-                baselineSuccess.style.display = 'block';
-                baselineError.style.display = 'none';
-                // Refresh displayed data
+                modalSuccess.textContent = 'Baseline saved';
+                modalSuccess.style.display = 'block';
                 await fetchFreshData();
+                setTimeout(() => {
+                    baselineModal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }, 600);
             } catch (err) {
-                baselineError.textContent = 'Failed to save baseline: ' + err;
-                baselineError.style.display = 'block';
+                modalError.textContent = 'Failed to save baseline: ' + err;
+                modalError.style.display = 'block';
             } finally {
-                saveBaselineBtn.disabled = false;
-                saveBaselineBtn.textContent = 'Save Baseline';
+                modalSaveBtn.disabled = false;
+                modalSaveBtn.textContent = 'Save Baseline';
             }
         });
 
-        clearBaselineBtn.addEventListener('click', async () => {
-            clearBaselineBtn.disabled = true;
-            clearBaselineBtn.textContent = 'Clearing...';
+        modalClearBtn.addEventListener('click', async () => {
+            modalClearBtn.disabled = true;
+            modalClearBtn.textContent = 'Clearing...';
             try {
                 await invoke('clear_baseline_command');
-                baselineSuccess.textContent = 'Baseline cleared';
-                baselineSuccess.style.display = 'block';
-                baselineError.style.display = 'none';
-                // Refresh displayed data
+                modalSuccess.textContent = 'Baseline cleared';
+                modalSuccess.style.display = 'block';
                 await fetchFreshData();
+                setTimeout(() => {
+                    baselineModal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }, 600);
             } catch (err) {
-                baselineError.textContent = 'Failed to clear baseline: ' + err;
-                baselineError.style.display = 'block';
+                modalError.textContent = 'Failed to clear baseline: ' + err;
+                modalError.style.display = 'block';
             } finally {
-                clearBaselineBtn.disabled = false;
-                clearBaselineBtn.textContent = 'Clear Baseline';
+                modalClearBtn.disabled = false;
+                modalClearBtn.textContent = 'Clear Baseline';
             }
         });
 

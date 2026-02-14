@@ -22,7 +22,7 @@
         "resizable": false,
         "title": "Token Meter",
         "width": 196,
-        "height": 150,
+        "height": 170,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
