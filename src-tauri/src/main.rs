@@ -7,7 +7,7 @@ mod storage;
 #[path = "../../src/domain.rs"]
 mod domain;
 
-use storage::{is_cache_outdated, load_api_key, load_cache, save_api_key, save_cache};
+use storage::{is_cache_outdated, load_api_key, load_cache, save_api_key, save_cache, save_baseline, clear_baseline};
 use tauri::Manager;
 
 #[tauri::command]
@@ -31,11 +31,24 @@ async fn get_cached_data() -> Result<Option<serde_json::Value>, String> {
     Some(cache) => {
       if !is_cache_outdated() {
         if let Some(total) = cache.openai_total {
-          Ok(Some(serde_json::json!({
-            "success": true,
-            "data": total,
-            "status": "From cache"
-          })))
+          // Include baseline info if present so the UI can show baseline metadata without hitting the network
+          if let Some(b) = cache.baseline {
+            Ok(Some(serde_json::json!({
+              "success": true,
+              "data": total,
+              "baseline": {
+                "amount": b.amount,
+                "start_iso": b.start_iso
+              },
+              "status": "From cache"
+            })))
+          } else {
+            Ok(Some(serde_json::json!({
+              "success": true,
+              "data": total,
+              "status": "From cache"
+            })))
+          }
         } else {
           Ok(None)
         }
@@ -50,21 +63,75 @@ async fn get_cached_data() -> Result<Option<serde_json::Value>, String> {
 #[tauri::command]
 async fn fetch_month_to_date(api_key: String) -> Result<serde_json::Value, String> {
   let agg = aggregator::UsageAggregator::new(&api_key);
-  match agg.fetch_month_to_date().await {
-    Ok(total) => {
-      // Save to cache after successful fetch
-      if let Err(e) = save_cache(&total) {
-        eprintln!("Failed to save cache: {}", e);
+
+  // If there's a baseline configured in cache, compute usage since baseline start and return remaining amount
+  if let Some(cache) = load_cache() {
+    if let Some(baseline) = cache.baseline {
+      // parse baseline start ISO
+      match chrono::DateTime::parse_from_rfc3339(&baseline.start_iso) {
+        Ok(dt) => {
+          let start_ts = dt.with_timezone(&chrono::Utc).timestamp();
+          let end_ts = chrono::Utc::now().timestamp();
+          match agg.fetch_since(start_ts, Some(end_ts)).await {
+            Ok(used) => {
+              // parse baseline amount
+              match rust_decimal::Decimal::from_str_exact(&baseline.amount) {
+                Ok(bamount) => {
+                  let remaining = bamount - used;
+                  Ok(serde_json::json!({
+                    "success": true,
+                    "data": remaining.to_string(),
+                    "status": "From baseline"
+                  }))
+                }
+                Err(e) => Ok(serde_json::json!({
+                  "success": false,
+                  "error": format!("invalid baseline amount: {}", e)
+                })),
+              }
+            }
+            Err(e) => Ok(serde_json::json!({
+              "success": false,
+              "error": e.to_string()
+            })),
+          }
+        }
+        Err(e) => Ok(serde_json::json!({
+          "success": false,
+          "error": format!("invalid baseline start_iso: {}", e)
+        })),
       }
-      Ok(serde_json::json!({
+    } else {
+      // No baseline: default month-to-date behavior
+      match agg.fetch_month_to_date().await {
+        Ok(total) => {
+          // Save to cache after successful fetch
+          if let Err(e) = save_cache(&total) {
+            eprintln!("Failed to save cache: {}", e);
+          }
+          Ok(serde_json::json!({
+            "success": true,
+            "data": total.to_string()
+          }))
+        },
+        Err(e) => Ok(serde_json::json!({
+          "success": false,
+          "error": e.to_string()
+        })),
+      }
+    }
+  } else {
+    // No cache present; behave like month-to-date
+    match agg.fetch_month_to_date().await {
+      Ok(total) => Ok(serde_json::json!({
         "success": true,
         "data": total.to_string()
-      }))
-    },
-    Err(e) => Ok(serde_json::json!({
-      "success": false,
-      "error": e.to_string()
     })),
+      Err(e) => Ok(serde_json::json!({
+        "success": false,
+        "error": e.to_string()
+      })),
+    }
   }
 }
 
@@ -88,6 +155,16 @@ fn save_api_key_command(api_key: String) -> Result<(), String> {
   save_api_key(&api_key).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn save_baseline_command(amount: String, start_iso: String) -> Result<(), String> {
+  save_baseline(&amount, &start_iso).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clear_baseline_command() -> Result<(), String> {
+  clear_baseline().map_err(|e| e.to_string())
+}
+
 fn main() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
@@ -97,6 +174,8 @@ fn main() {
       fetch_month_to_date,
       validate_api_key,
       save_api_key_command,
+      save_baseline_command,
+      clear_baseline_command,
     ])
     .setup(|app| {
       // Open dev tools automatically in debug mode

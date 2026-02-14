@@ -113,3 +113,14 @@ pub fn save_baseline(amount: &str, start_iso: &str) -> Result<()> {
     fs::write(&p, serde_json::to_string_pretty(&data)?).context("writing cache file")?;
     Ok(())
 }
+
+pub fn clear_baseline() -> Result<()> {
+    let mut p = base_dir().context("cannot find config dir")?;
+    fs::create_dir_all(&p).ok();
+    p.push("api_usage.json");
+    // load existing
+    let mut data = load_cache().unwrap_or(CacheData { openai_total: None, fetched_at: None, baseline: None });
+    data.baseline = None;
+    fs::write(&p, serde_json::to_string_pretty(&data)?).context("writing cache file")?;
+    Ok(())
+}

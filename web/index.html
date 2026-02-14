@@ -163,9 +163,27 @@
         <div class="content">
             <!-- Normal Display -->
             <div id="normal-display">
-                <div class="cost" id="cost">MTD: $12.34</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                  <div class="cost" id="cost">MTD: $12.34</div>
+                  <div style="display:flex; gap:6px; align-items:center;">
+                    <button class="refresh-button" id="refresh-btn">Refresh</button>
+                    <button class="refresh-button" id="baseline-toggle-btn">Baseline</button>
+                  </div>
+                </div>
+
                 <div class="status" id="status">Status: Ready</div>
-                <button class="refresh-button" id="refresh-btn">Refresh</button>
+
+                <!-- Inline Baseline Form (hidden by default) -->
+                <div id="baseline-form" style="display:none; margin-top:6px;">
+                  <input type="number" id="baseline-amount" class="setup-input" placeholder="Baseline amount (e.g. 5.10)" step="0.01" min="0">
+                  <input type="date" id="baseline-date" class="setup-input" placeholder="Start date">
+                  <div style="display:flex; gap:6px;">
+                    <button class="setup-button" id="save-baseline-btn">Save Baseline</button>
+                    <button class="setup-button" id="clear-baseline-btn">Clear Baseline</button>
+                  </div>
+                  <div class="setup-error" id="baseline-error" style="display:none"></div>
+                  <div class="setup-success" id="baseline-success" style="display:none"></div>
+                </div>
             </div>
             
             <!-- Setup Display -->
@@ -194,6 +212,14 @@
         const costEl = document.getElementById('cost');
         const statusEl = document.getElementById('status');
         const refreshBtn = document.getElementById('refresh-btn');
+        const baselineToggleBtn = document.getElementById('baseline-toggle-btn');
+        const baselineForm = document.getElementById('baseline-form');
+        const baselineAmountInput = document.getElementById('baseline-amount');
+        const baselineDateInput = document.getElementById('baseline-date');
+        const saveBaselineBtn = document.getElementById('save-baseline-btn');
+        const clearBaselineBtn = document.getElementById('clear-baseline-btn');
+        const baselineError = document.getElementById('baseline-error');
+        const baselineSuccess = document.getElementById('baseline-success');
         const normalDisplay = document.getElementById('normal-display');
         const setupContainer = document.getElementById('setup-container');
         const apiKeyForm = document.getElementById('api-key-form');
@@ -215,7 +241,14 @@
                     const cachedData = await invoke('get_cached_data');
                     console.log('cachedData:', cachedData);
                     if (cachedData) {
-                        updateUI(cachedData.data, cachedData.status);
+                        // If cachedData includes baseline metadata, show it in status
+                        const statusMsg = cachedData.status || 'From cache';
+                        if (cachedData.baseline) {
+                            const b = cachedData.baseline;
+                            updateUI(cachedData.data, `${statusMsg} (baseline ${b.amount} from ${b.start_iso})`);
+                        } else {
+                            updateUI(cachedData.data, statusMsg);
+                        }
                         currentCost = cachedData.data;
                     } else {
                         // Fetch fresh data
@@ -238,10 +271,17 @@
         }
 
         function updateUI(cost, status) {
+            // If the status indicates a baseline response, label differently
+            const isBaseline = typeof status === 'string' && status.includes('From baseline');
+
             if (cost !== null) {
-                costEl.textContent = `MTD: $${parseFloat(cost).toFixed(2)}`;
+                if (isBaseline) {
+                    costEl.textContent = `Baseline Remaining: $${parseFloat(cost).toFixed(2)}`;
+                } else {
+                    costEl.textContent = `MTD: $${parseFloat(cost).toFixed(2)}`;
+                }
             } else {
-                costEl.textContent = 'MTD: --';
+                costEl.textContent = isBaseline ? 'Baseline Remaining: --' : 'MTD: --';
             }
             
             // Add auto-refresh indicator to status
@@ -344,8 +384,10 @@
                 
                 if (result.success) {
                     currentCost = result.data;
-                    currentStatus = 'Fetched';
-                    updateUI(result.data, 'Fetched');
+                    // Use returned status if provided to determine labeling
+                    const respStatus = result.status || 'Fetched';
+                    currentStatus = respStatus;
+                    updateUI(result.data, respStatus);
                 } else {
                     currentStatus = 'Failed: ' + result.error;
                     updateUI(currentCost, currentStatus);
@@ -360,6 +402,76 @@
         // Event listeners
         refreshBtn.addEventListener('click', () => {
             fetchFreshData();
+        });
+
+        // Baseline UI handlers
+        baselineToggleBtn.addEventListener('click', () => {
+            if (baselineForm.style.display === 'none') {
+                baselineForm.style.display = 'block';
+                // Pre-fill with today's date
+                const today = new Date().toISOString().slice(0,10);
+                baselineDateInput.value = today;
+                baselineError.style.display = 'none';
+                baselineSuccess.style.display = 'none';
+            } else {
+                baselineForm.style.display = 'none';
+            }
+        });
+
+        saveBaselineBtn.addEventListener('click', async () => {
+            const amount = baselineAmountInput.value.trim();
+            const date = baselineDateInput.value;
+            baselineError.style.display = 'none';
+            baselineSuccess.style.display = 'none';
+
+            if (!amount || isNaN(parseFloat(amount))) {
+                baselineError.textContent = 'Please enter a valid baseline amount';
+                baselineError.style.display = 'block';
+                return;
+            }
+            if (!date) {
+                baselineError.textContent = 'Please select a baseline start date';
+                baselineError.style.display = 'block';
+                return;
+            }
+
+            // Build RFC3339 start ISO (midnight UTC)
+            const startIso = `${date}T00:00:00Z`;
+            saveBaselineBtn.disabled = true;
+            saveBaselineBtn.textContent = 'Saving...';
+            try {
+                await invoke('save_baseline_command', { amount, startIso });
+                baselineSuccess.textContent = 'Baseline saved';
+                baselineSuccess.style.display = 'block';
+                baselineError.style.display = 'none';
+                // Refresh displayed data
+                await fetchFreshData();
+            } catch (err) {
+                baselineError.textContent = 'Failed to save baseline: ' + err;
+                baselineError.style.display = 'block';
+            } finally {
+                saveBaselineBtn.disabled = false;
+                saveBaselineBtn.textContent = 'Save Baseline';
+            }
+        });
+
+        clearBaselineBtn.addEventListener('click', async () => {
+            clearBaselineBtn.disabled = true;
+            clearBaselineBtn.textContent = 'Clearing...';
+            try {
+                await invoke('clear_baseline_command');
+                baselineSuccess.textContent = 'Baseline cleared';
+                baselineSuccess.style.display = 'block';
+                baselineError.style.display = 'none';
+                // Refresh displayed data
+                await fetchFreshData();
+            } catch (err) {
+                baselineError.textContent = 'Failed to clear baseline: ' + err;
+                baselineError.style.display = 'block';
+            } finally {
+                clearBaselineBtn.disabled = false;
+                clearBaselineBtn.textContent = 'Clear Baseline';
+            }
         });
 
         // Setup UI event listeners

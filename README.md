@@ -147,6 +147,5 @@ Or run the Rust binary directly with RUST_LOG set.
 
 ## Limitations & Future work
 
-- No system tray integration yet
-- No automatic periodic refresh (refresh is manual)
+- No baseline inputting
 - No multi-provider UI (the code is structured to add other providers)
