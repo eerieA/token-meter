@@ -160,23 +160,29 @@
             position: fixed;
             inset: 0;
             z-index: 9999;
+            /* put the modal out of the document flow and center its contents */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
         }
 
         #baseline-modal-backdrop {
+            /* backdrop should cover the modal container (widget area) */
             position: absolute;
             inset: 0;
             background: rgba(0, 0, 0, 0.35);
             backdrop-filter: blur(2px);
+            z-index: 1;
         }
 
         #baseline-modal-panel {
-            position: fixed;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
+            position: relative;
+            z-index: 2;
             /* make the modal a little smaller than the normal UI and responsive */
             width: min(85%, 180px);
             max-width: 90vw;
+            height: 90%;
             background: rgba(255, 255, 255, 0.95);
             padding: 10px;
             border-radius: 8px;
@@ -242,8 +248,8 @@
                     placeholder="Baseline amount (e.g. 5.10)" step="0.01" min="0">
                 <input type="date" id="modal-baseline-date" class="setup-input">
                 <div style="display:flex; gap:6px;">
-                    <button class="setup-button" id="modal-save-baseline-btn">Save Baseline</button>
-                    <button class="setup-button" id="modal-clear-baseline-btn">Clear Baseline</button>
+                    <button class="setup-button" id="modal-save-baseline-btn">Save</button>
+                    <button class="setup-button" id="modal-clear-baseline-btn">Clear</button>
                 </div>
                 <div class="setup-error" id="modal-baseline-error" style="display:none"></div>
                 <div class="setup-success" id="modal-baseline-success" style="display:none"></div>
@@ -476,8 +482,14 @@
             }
             modalError.style.display = 'none';
             modalSuccess.style.display = 'none';
-            baselineModal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
+            // limit modal to the widget area so backdrop/panel don't enlarge the window
+            const rect = widget.getBoundingClientRect();
+            baselineModal.style.position = 'fixed';
+            baselineModal.style.left = rect.left + 'px';
+            baselineModal.style.top = rect.top + 'px';
+            baselineModal.style.width = rect.width + 'px';
+            baselineModal.style.height = rect.height + 'px';
+            baselineModal.style.display = 'flex';
             modalAmountInput.focus();
             modalAmountInput.select();
         });
@@ -485,16 +497,28 @@
         // close handlers
         modalBackdrop.addEventListener('click', () => {
             baselineModal.style.display = 'none';
-            document.body.style.overflow = '';
+            baselineModal.style.position = '';
+            baselineModal.style.left = '';
+            baselineModal.style.top = '';
+            baselineModal.style.width = '';
+            baselineModal.style.height = '';
         });
         modalCloseBtn.addEventListener('click', () => {
             baselineModal.style.display = 'none';
-            document.body.style.overflow = '';
+            baselineModal.style.position = '';
+            baselineModal.style.left = '';
+            baselineModal.style.top = '';
+            baselineModal.style.width = '';
+            baselineModal.style.height = '';
         });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && baselineModal.style.display === 'block') {
+            if (e.key === 'Escape' && baselineModal.style.display === 'flex') {
                 baselineModal.style.display = 'none';
-                document.body.style.overflow = '';
+                baselineModal.style.position = '';
+                baselineModal.style.left = '';
+                baselineModal.style.top = '';
+                baselineModal.style.width = '';
+                baselineModal.style.height = '';
             }
         });
 
@@ -523,7 +547,11 @@
                 await fetchFreshData();
                 setTimeout(() => {
                     baselineModal.style.display = 'none';
-                    document.body.style.overflow = '';
+                    baselineModal.style.position = '';
+                    baselineModal.style.left = '';
+                    baselineModal.style.top = '';
+                    baselineModal.style.width = '';
+                    baselineModal.style.height = '';
                 }, 600);
             } catch (err) {
                 modalError.textContent = 'Failed to save baseline: ' + err;
@@ -544,7 +572,11 @@
                 await fetchFreshData();
                 setTimeout(() => {
                     baselineModal.style.display = 'none';
-                    document.body.style.overflow = '';
+                    baselineModal.style.position = '';
+                    baselineModal.style.left = '';
+                    baselineModal.style.top = '';
+                    baselineModal.style.width = '';
+                    baselineModal.style.height = '';
                 }, 600);
             } catch (err) {
                 modalError.textContent = 'Failed to clear baseline: ' + err;
