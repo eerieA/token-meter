@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -155,6 +156,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="widget">
         <!-- <div class="header">
@@ -163,35 +165,37 @@
         <div class="content">
             <!-- Normal Display -->
             <div id="normal-display">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                  <div class="cost" id="cost">MTD: $12.34</div>
-                  <div style="display:flex; gap:6px; align-items:center;">
-                    <button class="refresh-button" id="refresh-btn">Refresh</button>
-                    <button class="refresh-button" id="baseline-toggle-btn">Baseline</button>
-                  </div>
+                <div
+                    style="display:flex; flex-direction: column; justify-content:space-between; align-items:center; gap:8px;">
+                    <div class="cost" id="cost">MTD: $12.34</div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button class="refresh-button" id="refresh-btn">Refresh</button>
+                        <button class="refresh-button" id="baseline-toggle-btn">Baseline</button>
+                    </div>
+                    <div class="status" id="status">Status: Ready</div>
                 </div>
-
-                <div class="status" id="status">Status: Ready</div>
 
                 <!-- Inline Baseline Form (hidden by default) -->
                 <div id="baseline-form" style="display:none; margin-top:6px;">
-                  <input type="number" id="baseline-amount" class="setup-input" placeholder="Baseline amount (e.g. 5.10)" step="0.01" min="0">
-                  <input type="date" id="baseline-date" class="setup-input" placeholder="Start date">
-                  <div style="display:flex; gap:6px;">
-                    <button class="setup-button" id="save-baseline-btn">Save Baseline</button>
-                    <button class="setup-button" id="clear-baseline-btn">Clear Baseline</button>
-                  </div>
-                  <div class="setup-error" id="baseline-error" style="display:none"></div>
-                  <div class="setup-success" id="baseline-success" style="display:none"></div>
+                    <input type="number" id="baseline-amount" class="setup-input"
+                        placeholder="Baseline amount (e.g. 5.10)" step="0.01" min="0">
+                    <input type="date" id="baseline-date" class="setup-input" placeholder="Start date">
+                    <div style="display:flex; gap:6px;">
+                        <button class="setup-button" id="save-baseline-btn">Save Baseline</button>
+                        <button class="setup-button" id="clear-baseline-btn">Clear Baseline</button>
+                    </div>
+                    <div class="setup-error" id="baseline-error" style="display:none"></div>
+                    <div class="setup-success" id="baseline-success" style="display:none"></div>
                 </div>
             </div>
-            
+
             <!-- Setup Display -->
             <div class="setup-container" id="setup-container">
                 <div class="setup-title">Setup Required</div>
                 <form id="api-key-form" onsubmit="return false;">
                     <input type="text" name="username" autocomplete="username" style="display: none;">
-                    <input type="password" class="setup-input" id="api-key-input" placeholder="Enter OpenAI API Key" autocomplete="new-password">
+                    <input type="password" class="setup-input" id="api-key-input" placeholder="Enter OpenAI API Key"
+                        autocomplete="new-password">
                     <button type="submit" class="setup-button" id="save-api-btn">Save & Start</button>
                 </form>
                 <div class="setup-error" id="setup-error" style="display: none;"></div>
@@ -235,7 +239,7 @@
                 // Check for saved API key
                 const apiKeyResult = await invoke('get_api_key');
                 console.log('apiKeyResult:', apiKeyResult);
-                
+
                 if (apiKeyResult) {
                     // Load cached data
                     const cachedData = await invoke('get_cached_data');
@@ -276,14 +280,14 @@
 
             if (cost !== null) {
                 if (isBaseline) {
-                    costEl.textContent = `Baseline Remaining: $${parseFloat(cost).toFixed(2)}`;
+                    costEl.textContent = `BLR: $${parseFloat(cost).toFixed(2)}`;
                 } else {
                     costEl.textContent = `MTD: $${parseFloat(cost).toFixed(2)}`;
                 }
             } else {
-                costEl.textContent = isBaseline ? 'Baseline Remaining: --' : 'MTD: --';
+                costEl.textContent = isBaseline ? 'BLR: --' : 'MTD: --';
             }
-            
+
             // Add auto-refresh indicator to status
             const autoRefreshIndicator = autoRefreshInterval ? ' (Auto: ON)' : '';
             statusEl.textContent = `Status: ${status}${autoRefreshIndicator}`;
@@ -295,7 +299,7 @@
             if (autoRefreshInterval) {
                 clearInterval(autoRefreshInterval);
             }
-            
+
             // Set up auto-refresh every 3 minutes (180,000 ms)
             autoRefreshInterval = setInterval(async () => {
                 console.log('Auto-refresh triggered');
@@ -338,7 +342,7 @@
 
         async function saveApiKey() {
             const apiKey = apiKeyInput.value.trim();
-            
+
             if (!apiKey) {
                 showSetupError('Please enter an API key');
                 return;
@@ -350,12 +354,12 @@
             try {
                 // Validate the API key first
                 const validation = await invoke('validate_api_key', { apiKey });
-                
+
                 if (validation.success) {
                     // Save the API key
                     await invoke('save_api_key_command', { apiKey });
                     showSetupSuccess('API key saved successfully!');
-                    
+
                     // Wait a moment then switch to normal UI
                     setTimeout(async () => {
                         showNormalUI();
@@ -378,10 +382,10 @@
             try {
                 currentStatus = 'Fetching...';
                 updateUI(currentCost, currentStatus);
-                
+
                 const result = await invoke('fetch_month_to_date', { apiKey: await invoke('get_api_key') });
                 console.log('fetch_month_to_date result:', result);
-                
+
                 if (result.success) {
                     currentCost = result.data;
                     // Use returned status if provided to determine labeling
@@ -409,7 +413,7 @@
             if (baselineForm.style.display === 'none') {
                 baselineForm.style.display = 'block';
                 // Pre-fill with today's date
-                const today = new Date().toISOString().slice(0,10);
+                const today = new Date().toISOString().slice(0, 10);
                 baselineDateInput.value = today;
                 baselineError.style.display = 'none';
                 baselineSuccess.style.display = 'none';
@@ -486,7 +490,7 @@
         let dragOffset = { x: 0, y: 0 };
 
         const widget = document.querySelector('.widget');
-        
+
         widget.addEventListener('mousedown', (e) => {
             if (e.target.closest('.drag-handle')) {
                 isDragging = true;
@@ -500,7 +504,7 @@
             if (isDragging) {
                 const x = e.clientX - dragOffset.x;
                 const y = e.clientY - dragOffset.y;
-                
+
                 // Use Tauri command to move window
                 invoke('move_window', { x, y });
             }
@@ -512,10 +516,10 @@
 
         // Initialize app
         console.log('Script loaded, calling init()');
-        
+
         // Ensure normal display is shown initially
         showNormalUI();
-        
+
         init();
 
         // Cleanup auto-refresh when page unloads
@@ -524,4 +528,5 @@
         });
     </script>
 </body>
+
 </html>
