@@ -103,7 +103,7 @@ async fn fetch_month_to_date(api_key: String) -> Result<serde_json::Value, Strin
                   Ok(serde_json::json!({
                     "success": true,
                     "data": remaining.to_string(),
-                    "status": "From baseline"
+                    "status": "With baseline"
                   }))
                 }
                 Err(e) => Ok(serde_json::json!({
