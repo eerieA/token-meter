@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #[path = "../../src/providers/mod.rs"]
 mod providers;
 #[path = "../../src/aggregator.rs"]
