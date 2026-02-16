@@ -13,7 +13,6 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             user-select: none;
             -webkit-user-select: none;
-            -webkit-app-region: drag;
         }
 
         .widget {
@@ -26,6 +25,38 @@
             flex-direction: column;
             padding: 8px;
             box-sizing: border-box;
+            -webkit-app-region: drag;
+        }
+
+        /* Context menu */
+        .context-menu {
+            position: fixed;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(200, 200, 200, 0.8);
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            z-index: 10000;
+            display: none;
+            min-width: 120px;
+            font-size: 12px;
+            -webkit-app-region: no-drag;
+        }
+
+        .context-menu-item {
+            padding: 6px 12px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-family: inherit;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .context-menu-item:hover {
+            background: rgba(100, 100, 100, 0.1);
         }
 
         #normal-display {
@@ -92,6 +123,7 @@
             cursor: pointer;
             font-size: 12px;
             align-self: flex-end;
+            -webkit-app-region: no-drag;
         }
 
         .refresh-button:hover {
@@ -124,6 +156,7 @@
             font-size: 12px;
             margin-bottom: 8px;
             background: rgba(255, 255, 255, 0.8);
+            -webkit-app-region: no-drag;
         }
 
         .setup-button {
@@ -135,6 +168,7 @@
             cursor: pointer;
             font-size: 12px;
             align-self: center;
+            -webkit-app-region: no-drag;
         }
 
         .setup-button:hover {
@@ -262,8 +296,17 @@
         </div>
     </div>
 
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu">
+        <button class="context-menu-item" id="close-app">Close</button>
+    </div>
+
     <script>
         const { invoke } = window.__TAURI__.core;
+
+        const appWindow = window.__TAURI__?.window?.getCurrentWindow
+            ? window.__TAURI__.window.getCurrentWindow()
+            : null;
 
         // State
         let currentCost = null;
@@ -291,6 +334,10 @@
         const saveApiBtn = document.getElementById('save-api-btn');
         const setupError = document.getElementById('setup-error');
         const setupSuccess = document.getElementById('setup-success');
+
+        // Context menu elements
+        const contextMenu = document.getElementById('context-menu');
+        const closeAppBtn = document.getElementById('close-app');
 
         // Initialize
         async function init() {
@@ -600,32 +647,70 @@
         });
 
         // Drag functionality
-        let isDragging = false;
-        let dragOffset = { x: 0, y: 0 };
-
         const widget = document.querySelector('.widget');
 
-        widget.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.drag-handle')) {
-                isDragging = true;
-                dragOffset.x = e.clientX - widget.offsetLeft;
-                dragOffset.y = e.clientY - widget.offsetTop;
-                e.preventDefault();
+        widget.addEventListener('mousedown', async (e) => {
+            // Don't drag if clicking on interactive elements
+            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('#baseline-modal-panel')) {
+                return;
+            }
+
+            // Prefer native window-manager drag (fixes jitter/lag on Linux)
+            if (appWindow && typeof appWindow.startDragging === 'function') {
+                try {
+                    await appWindow.startDragging();
+                } catch (err) {
+                    console.error('startDragging failed:', err);
+                }
+            }
+
+            e.preventDefault();
+        });
+
+        // Context menu functionality
+        widget.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            
+            // Position context menu near mouse
+            const x = e.clientX;
+            const y = e.clientY;
+            
+            // Make sure menu doesn't go off screen
+            const menuWidth = 120;
+            const menuHeight = 40;
+            const screenWidth = window.innerWidth;
+            const screenHeight = window.innerHeight;
+            
+            const adjustedX = x + menuWidth > screenWidth ? screenWidth - menuWidth : x;
+            const adjustedY = y + menuHeight > screenHeight ? screenHeight - menuHeight : y;
+            
+            contextMenu.style.left = adjustedX + 'px';
+            contextMenu.style.top = adjustedY + 'px';
+            contextMenu.style.display = 'block';
+        });
+
+        // Close context menu when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            if (!contextMenu.contains(e.target)) {
+                contextMenu.style.display = 'none';
             }
         });
 
-        document.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                const x = e.clientX - dragOffset.x;
-                const y = e.clientY - dragOffset.y;
-
-                // Use Tauri command to move window
-                invoke('move_window', { x, y });
+        // Close app handler
+        closeAppBtn.addEventListener('click', async () => {
+            try {
+                await invoke('close_window');
+            } catch (err) {
+                console.error('Failed to close window:', err);
             }
+            contextMenu.style.display = 'none';
         });
 
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
+        // Close context menu on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                contextMenu.style.display = 'none';
+            }
         });
 
         // Initialize app

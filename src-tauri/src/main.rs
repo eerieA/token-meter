@@ -11,16 +11,6 @@ use storage::{is_cache_outdated, load_api_key, load_cache, save_api_key, save_ca
 use tauri::Manager;
 
 #[tauri::command]
-async fn move_window(window: tauri::Window, x: f64, y: f64) -> Result<(), String> {
-  window
-    .set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-      x: x as i32,
-      y: y as i32,
-    }))
-    .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 async fn get_api_key() -> Result<Option<String>, String> {
   Ok(load_api_key())
 }
@@ -190,10 +180,14 @@ fn clear_baseline_command() -> Result<(), String> {
   clear_baseline().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn close_window(window: tauri::Window) -> Result<(), String> {
+  window.close().map_err(|e| e.to_string())
+}
+
 fn main() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
-      move_window,
       get_api_key,
       get_cached_data,
       fetch_month_to_date,
@@ -201,6 +195,7 @@ fn main() {
       save_api_key_command,
       save_baseline_command,
       clear_baseline_command,
+      close_window,
     ])
     .setup(|app| {
       // Open dev tools automatically in debug mode

@@ -6,13 +6,13 @@ description = "Allows invoking Token Meter custom backend commands"
 
 [permission.commands]
 allow = [
-  "move_window",
   "get_api_key",
   "get_cached_data",
   "validate_api_key",
   "fetch_month_to_date",
   "save_api_key_command",
   "save_baseline_command",
-  "clear_baseline_command"
+  "clear_baseline_command",
+  "close_window"
 ]
 deny = []
