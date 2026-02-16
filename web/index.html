@@ -59,6 +59,14 @@
             background: rgba(100, 100, 100, 0.1);
         }
 
+        .context-menu-item:first-child {
+            border-radius: 4px 4px 0 0;
+        }
+
+        .context-menu-item:last-child {
+            border-radius: 0 0 4px 4px;
+        }
+
         #normal-display {
             display: flex;
             flex-direction: column;
@@ -299,6 +307,7 @@
     <!-- Context Menu -->
     <div id="context-menu" class="context-menu">
         <button class="context-menu-item" id="close-app">Close</button>
+        <button class="context-menu-item" id="cancel-menu">Cancel</button>
     </div>
 
     <script>
@@ -338,6 +347,7 @@
         // Context menu elements
         const contextMenu = document.getElementById('context-menu');
         const closeAppBtn = document.getElementById('close-app');
+        const cancelMenuBtn = document.getElementById('cancel-menu');
 
         // Initialize
         async function init() {
@@ -703,6 +713,11 @@
             } catch (err) {
                 console.error('Failed to close window:', err);
             }
+            contextMenu.style.display = 'none';
+        });
+
+        // Cancel menu handler
+        cancelMenuBtn.addEventListener('click', () => {
             contextMenu.style.display = 'none';
         });
 
