@@ -310,9 +310,18 @@
         <button class="context-menu-item" id="cancel-menu">Cancel</button>
     </div>
 
-    <script>
+    <script type="module">
+        import { forceMousemoveRepaint, forceElementMousemove, forcePointerRepaint,
+            forceCssRepaint, toggleWindowOpacityRepaint, forceFullWindowPaintNudge
+         } from './ui/contextMenu.js';
+        window.forceMousemoveRepaint = forceMousemoveRepaint;
+        window.forceElementMousemove = forceElementMousemove;
+        window.forcePointerRepaint = forcePointerRepaint;
+        window.forceCssRepaint = forceCssRepaint;
+        window.toggleWindowOpacityRepaint = toggleWindowOpacityRepaint;
+        window.forceFullWindowPaintNudge = forceFullWindowPaintNudge;
+        
         const { invoke } = window.__TAURI__.core;
-
         const appWindow = window.__TAURI__?.window?.getCurrentWindow
             ? window.__TAURI__.window.getCurrentWindow()
             : null;
@@ -348,6 +357,74 @@
         const contextMenu = document.getElementById('context-menu');
         const closeAppBtn = document.getElementById('close-app');
         const cancelMenuBtn = document.getElementById('cancel-menu');
+
+        const baselineModalParent = baselineModal.parentElement;
+        const contextMenuParent = contextMenu.parentElement;
+
+        function forceWidgetRepaint() {
+            // Workaround for Linux transparent window repaint artifacts (stale pixels)
+            // by forcing a one-frame compositing change.
+            widget.style.transform = 'translateZ(0)';
+            requestAnimationFrame(() => {
+                widget.style.transform = '';
+            });
+        }
+
+        function hideBaselineModal() {
+            baselineModal.style.display = 'none';
+            baselineModal.style.position = '';
+            baselineModal.style.left = '';
+            baselineModal.style.top = '';
+            baselineModal.style.width = '';
+            baselineModal.style.height = '';
+            baselineModal.style.visibility = 'hidden';
+            baselineModal.style.pointerEvents = 'none';
+            baselineModal.setAttribute('aria-hidden', 'true');
+            if (baselineModalParent && baselineModal.parentElement) {
+                baselineModal.remove();
+            }
+            forceWidgetRepaint();
+        }
+
+        function showBaselineModal() {
+            if (baselineModalParent && !baselineModalParent.contains(baselineModal)) {
+                baselineModalParent.appendChild(baselineModal);
+            }
+            baselineModal.style.visibility = 'visible';
+            baselineModal.style.pointerEvents = 'auto';
+            baselineModal.setAttribute('aria-hidden', 'false');
+        }
+
+        export function hideContextMenu() {
+            console.log('hideContextMenu called');
+            // hide any in-DOM menu if present
+            try {
+              contextMenu.style.display = 'none';
+              contextMenu.style.visibility = 'hidden';
+              contextMenu.style.pointerEvents = 'none';
+              contextMenu.style.left = '';
+              contextMenu.style.top = '';
+              if (contextMenuParent && contextMenu.parentElement) {
+                contextMenu.remove();
+              }
+            } catch (e) {
+              // ignore if DOM not present in this window
+            }
+            forceWidgetRepaint();
+            if (window.forceFullWindowPaintNudge) window.forceFullWindowPaintNudge();
+            // Also tell the native overlay (if any) to hide
+            try { invoke('hide_context_menu'); } catch (e) { /* ignore */ }
+        }
+        // attach hideContextMenu so non-module code can call it
+        window.hideContextMenu = hideContextMenu;
+
+        function showContextMenu() {
+            if (contextMenuParent && !contextMenuParent.contains(contextMenu)) {
+                contextMenuParent.appendChild(contextMenu);
+            }
+            contextMenu.style.visibility = 'visible';
+            contextMenu.style.pointerEvents = 'auto';
+        }
 
         // Initialize
         async function init() {
@@ -527,6 +604,19 @@
 
         // Baseline UI handlers (modal)
         baselineToggleBtn.addEventListener('click', async () => {
+            // Prefer showing a native overlay window (more robust on Linux transparency/compositor)
+            try {
+                const overlayX = Math.round(window.screenX);
+                const overlayY = Math.round(window.screenY);
+                await invoke('show_baseline_modal', { x: overlayX, y: overlayY });
+                return;
+            } catch (err) {
+                console.error('show_baseline_modal invoke failed', err);
+                // fallback to in-DOM modal below
+            }
+
+            // Fallback: show the in-DOM modal if native overlay not available
+            showBaselineModal();
             try {
                 const cached = await invoke('get_cached_data');
                 if (cached && cached.baseline && cached.baseline.amount) {
@@ -558,29 +648,14 @@
 
         // close handlers
         modalBackdrop.addEventListener('click', () => {
-            baselineModal.style.display = 'none';
-            baselineModal.style.position = '';
-            baselineModal.style.left = '';
-            baselineModal.style.top = '';
-            baselineModal.style.width = '';
-            baselineModal.style.height = '';
+            hideBaselineModal();
         });
         modalCloseBtn.addEventListener('click', () => {
-            baselineModal.style.display = 'none';
-            baselineModal.style.position = '';
-            baselineModal.style.left = '';
-            baselineModal.style.top = '';
-            baselineModal.style.width = '';
-            baselineModal.style.height = '';
+            hideBaselineModal();
         });
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && baselineModal.style.display === 'flex') {
-                baselineModal.style.display = 'none';
-                baselineModal.style.position = '';
-                baselineModal.style.left = '';
-                baselineModal.style.top = '';
-                baselineModal.style.width = '';
-                baselineModal.style.height = '';
+                hideBaselineModal();
             }
         });
 
@@ -607,14 +682,7 @@
                 modalSuccess.textContent = 'Baseline saved';
                 modalSuccess.style.display = 'block';
                 await fetchFreshData();
-                setTimeout(() => {
-                    baselineModal.style.display = 'none';
-                    baselineModal.style.position = '';
-                    baselineModal.style.left = '';
-                    baselineModal.style.top = '';
-                    baselineModal.style.width = '';
-                    baselineModal.style.height = '';
-                }, 600);
+                hideBaselineModal();
             } catch (err) {
                 modalError.textContent = 'Failed to save baseline: ' + err;
                 modalError.style.display = 'block';
@@ -632,14 +700,7 @@
                 modalSuccess.textContent = 'Baseline cleared';
                 modalSuccess.style.display = 'block';
                 await fetchFreshData();
-                setTimeout(() => {
-                    baselineModal.style.display = 'none';
-                    baselineModal.style.position = '';
-                    baselineModal.style.left = '';
-                    baselineModal.style.top = '';
-                    baselineModal.style.width = '';
-                    baselineModal.style.height = '';
-                }, 600);
+                hideBaselineModal();
             } catch (err) {
                 modalError.textContent = 'Failed to clear baseline: ' + err;
                 modalError.style.display = 'block';
@@ -680,29 +741,41 @@
         // Context menu functionality
         widget.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            
-            // Position context menu near mouse
+
+            // Position relative to widget/window
             const x = e.clientX;
             const y = e.clientY;
-            
-            // Make sure menu doesn't go off screen
-            const menuWidth = 120;
-            const menuHeight = 40;
+
+            // Make sure menu doesn't go off screen (use same menu dims as overlay)
+            const menuWidth = 160;
+            const menuHeight = 80;
             const screenWidth = window.innerWidth;
             const screenHeight = window.innerHeight;
             
             const adjustedX = x + menuWidth > screenWidth ? screenWidth - menuWidth : x;
             const adjustedY = y + menuHeight > screenHeight ? screenHeight - menuHeight : y;
-            
-            contextMenu.style.left = adjustedX + 'px';
-            contextMenu.style.top = adjustedY + 'px';
-            contextMenu.style.display = 'block';
+
+            // Convert to screen coordinates so the native overlay window can be positioned correctly
+            const absoluteX = Math.round(window.screenX + adjustedX);
+            const absoluteY = Math.round(window.screenY + adjustedY);
+
+            // Show native overlay via Tauri command
+            try {
+                invoke('show_context_menu', { x: absoluteX, y: absoluteY });
+            } catch (err) {
+                console.error('show_context_menu invoke failed', err);
+                // Fallback to in-DOM menu if native overlay unavailable
+                showContextMenu();
+                contextMenu.style.left = adjustedX + 'px';
+                contextMenu.style.top = adjustedY + 'px';
+                contextMenu.style.display = 'block';
+            }
         });
 
         // Close context menu when clicking elsewhere
         document.addEventListener('click', (e) => {
             if (!contextMenu.contains(e.target)) {
-                contextMenu.style.display = 'none';
+                hideContextMenu();
             }
         });
 
@@ -713,18 +786,18 @@
             } catch (err) {
                 console.error('Failed to close window:', err);
             }
-            contextMenu.style.display = 'none';
+            hideContextMenu();
         });
 
         // Cancel menu handler
         cancelMenuBtn.addEventListener('click', () => {
-            contextMenu.style.display = 'none';
+            hideContextMenu();
         });
 
         // Close context menu on Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                contextMenu.style.display = 'none';
+                hideContextMenu();
             }
         });
 

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Baseline</title>
+<style>
+  /* Make the webview exactly the size of the dialog by centering the panel and removing any full-window backdrop */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-user-select: none;
+  }
+
+  .panel {
+    width: 320px;
+    background: rgba(255,255,255,0.95);
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    box-sizing: border-box;
+  }
+
+  .row{display:flex;gap:8px;margin-top:8px}
+  .input{width:100%;padding:6px;border:1px solid #cfcfcf;border-radius:4px}
+  .btn{padding:6px 10px;border:none;border-radius:4px;background:#505050;color:#fff;cursor:pointer}
+  .btn:disabled{opacity:0.6}
+</style>
+</head>
+<body>
+  <div class="panel" role="dialog" aria-modal="true">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:600">Set Baseline Credit</div>
+      <button id="btn-cancel" style="background:transparent;border:none;font-size:16px;cursor:pointer">✕</button>
+    </div>
+    <div style="margin-top:8px">
+      <input id="amount" class="input" type="number" step="0.01" min="0" placeholder="Baseline amount (e.g. 5.10)">
+    </div>
+    <div style="margin-top:8px">
+      <input id="date" class="input" type="date">
+    </div>
+    <div class="row">
+      <button id="btn-save" class="btn">Save</button>
+      <button id="btn-clear" class="btn">Clear</button>
+    </div>
+    <div id="msg" style="margin-top:8px;font-size:13px;color:#b33;display:none"></div>
+  </div>
+<script>
+  console.log('baseline overlay loaded');
+  function getInvoke() {
+    try {
+      if (window.__TAURI__) {
+        if (window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') return window.__TAURI__.core.invoke;
+        if (window.__TAURI__.tauri && typeof window.__TAURI__.tauri.invoke === 'function') return window.__TAURI__.tauri.invoke;
+        if (typeof window.__TAURI__.invoke === 'function') return window.__TAURI__.invoke;
+      }
+    } catch (e) { console.warn('getInvoke failed', e); }
+    return null;
+  }
+  const inv = getInvoke();
+  const btnCancel = document.getElementById('btn-cancel');
+  const btnSave = document.getElementById('btn-save');
+  const btnClear = document.getElementById('btn-clear');
+  const amountIn = document.getElementById('amount');
+  const dateIn = document.getElementById('date');
+  const msg = document.getElementById('msg');
+
+  async function tryInvoke(cmd, args) {
+    if (!inv) { console.error('invoke not available'); return null; }
+    try { return await inv(cmd, args); } catch (e) { console.error('invoke error', cmd, e); throw e; }
+  }
+
+  // Prefill fields from cached data
+  (async () => {
+    try {
+      const cached = await tryInvoke('get_cached_data');
+      if (cached && cached.baseline && cached.baseline.amount) {
+        amountIn.value = cached.baseline.amount;
+        if (cached.baseline.start_iso) dateIn.value = cached.baseline.start_iso.slice(0,10);
+      } else {
+        amountIn.value = '';
+        dateIn.value = new Date().toISOString().slice(0,10);
+      }
+    } catch (e) {
+      amountIn.value = '';
+      dateIn.value = new Date().toISOString().slice(0,10);
+    }
+  })();
+
+  btnCancel.addEventListener('click', async () => {
+    try { await tryInvoke('hide_baseline_modal'); } catch (e) { /* ignore */ }
+  });
+
+  btnSave.addEventListener('click', async () => {
+    msg.style.display = 'none';
+    const amount = (amountIn.value || '').trim();
+    const date = (dateIn.value || '');
+    if (!amount || isNaN(parseFloat(amount))) { msg.textContent = 'Please enter a valid amount'; msg.style.display = 'block'; return; }
+    if (!date) { msg.textContent = 'Please choose a date'; msg.style.display = 'block'; return; }
+    btnSave.disabled = true; btnSave.textContent = 'Saving...';
+    try {
+      const startIso = `${date}T00:00:00Z`;
+      await tryInvoke('save_baseline_command', { amount, startIso });
+      // close overlay
+      await tryInvoke('hide_baseline_modal');
+    } catch (e) {
+      msg.textContent = 'Failed to save baseline: ' + e; msg.style.display = 'block';
+    } finally {
+      btnSave.disabled = false; btnSave.textContent = 'Save';
+    }
+  });
+
+  btnClear.addEventListener('click', async () => {
+    btnClear.disabled = true; btnClear.textContent = 'Clearing...'; msg.style.display='none';
+    try {
+      await tryInvoke('clear_baseline_command');
+      await tryInvoke('hide_baseline_modal');
+    } catch (e) {
+      msg.textContent = 'Failed to clear baseline: ' + e; msg.style.display = 'block';
+    } finally {
+      btnClear.disabled = false; btnClear.textContent = 'Clear';
+    }
+  });
+
+  // click outside to dismiss (won't fire when overlay is sized to the panel)
+  document.addEventListener('click', async (e) => {
+    const panel = document.querySelector('.panel');
+    if (!panel.contains(e.target)) {
+      try { await tryInvoke('hide_baseline_modal'); } catch (e) {}
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      try { inv && inv('hide_baseline_modal'); } catch (e) {}
+    }
+  });
+
+  // Focus first field
+  window.addEventListener('load', () => { try { amountIn.focus(); amountIn.select(); window.focus(); } catch (e) {} });
+</script>
+</body>
+</html>

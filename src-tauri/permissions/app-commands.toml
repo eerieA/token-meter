@@ -13,6 +13,11 @@ allow = [
   "save_api_key_command",
   "save_baseline_command",
   "clear_baseline_command",
-  "close_window"
+  "close_window",
+  "show_context_menu",
+  "hide_context_menu",
+  "quit_app",
+  "show_baseline_modal",
+  "hide_baseline_modal"
 ]
 deny = []

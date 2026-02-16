@@ -109,6 +109,12 @@ cargo tauri build
 %  Bundles will appear under src-tauri/target/release/bundle (platform-dependent)
 ```
 
+. Or with very verbose log and save the log in a file.
+
+```bash
+cargo build --release -vv 2>&1 | tee build.log
+```
+
 `npm run dev` is convenient when working on the web frontend; `cargo tauri dev` is useful if you prefer invoking the native tooling directly.
 
 ## How the UI works
@@ -145,7 +151,8 @@ RUST_LOG=debug npm run dev
 
 Or run the Rust binary directly with RUST_LOG set.
 
+On Ubuntu and such, if use a terminal that is related to snap, dev run commands like `npm run dev` might encounter some lib paths issue. In such cases, try running in a clean system terminal.
+
 ## Limitations & Future work
 
-- No baseline inputting
 - No multi-provider UI (the code is structured to add other providers)

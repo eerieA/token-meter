@@ -8,7 +8,7 @@ mod storage;
 mod domain;
 
 use storage::{is_cache_outdated, load_api_key, load_cache, save_api_key, save_cache, save_baseline, clear_baseline, save_baseline_cache};
-use tauri::Manager;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, PhysicalPosition};
 
 #[tauri::command]
 async fn get_api_key() -> Result<Option<String>, String> {
@@ -185,6 +185,64 @@ async fn close_window(window: tauri::Window) -> Result<(), String> {
   window.close().map_err(|e| e.to_string())
 }
 
+// Close the entire application (used by the overlay 'Close' menu item)
+#[tauri::command]
+fn quit_app() {
+  eprintln!("[tauri] quit_app invoked");
+  // Best-effort: exit the process entirely
+  std::process::exit(0);
+}
+
+// Commands for the native context-menu overlay window
+#[tauri::command]
+fn show_context_menu(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), String> {
+  eprintln!("[tauri] show_context_menu invoked x={} y={}", x, y);
+  if let Some(win) = app.get_webview_window("context-menu") {
+    // Position and show the overlay window. Adjust position to avoid negative coords.
+    let px = if x < 0 { 0 } else { x };
+    let py = if y < 0 { 0 } else { y };
+    let _ = win.set_position(PhysicalPosition::new(px, py));
+    let _ = win.show();
+    let _ = win.set_focus();
+    return Ok(());
+  }
+  Err("context-menu window not found".into())
+}
+
+#[tauri::command]
+fn hide_context_menu(app: tauri::AppHandle) -> Result<(), String> {
+  eprintln!("[tauri] hide_context_menu invoked");
+  if let Some(win) = app.get_webview_window("context-menu") {
+    let _ = win.hide();
+    return Ok(());
+  }
+  Err("context-menu window not found".into())
+}
+
+#[tauri::command]
+fn show_baseline_modal(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), String> {
+  eprintln!("[tauri] show_baseline_modal invoked x={} y={}", x, y);
+  if let Some(win) = app.get_webview_window("baseline-modal") {
+    let px = if x < 0 { 0 } else { x };
+    let py = if y < 0 { 0 } else { y };
+    let _ = win.set_position(PhysicalPosition::new(px, py));
+    let _ = win.show();
+    let _ = win.set_focus();
+    return Ok(());
+  }
+  Err("baseline-modal window not found".into())
+}
+
+#[tauri::command]
+fn hide_baseline_modal(app: tauri::AppHandle) -> Result<(), String> {
+  eprintln!("[tauri] hide_baseline_modal invoked");
+  if let Some(win) = app.get_webview_window("baseline-modal") {
+    let _ = win.hide();
+    return Ok(());
+  }
+  Err("baseline-modal window not found".into())
+}
+
 fn main() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
@@ -196,13 +254,61 @@ fn main() {
       save_baseline_command,
       clear_baseline_command,
       close_window,
+      quit_app,
+      show_context_menu,
+      hide_context_menu,
+      show_baseline_modal,
+      hide_baseline_modal,
     ])
     .setup(|app| {
-      // Open dev tools automatically in debug mode
+      // Create a hidden overlay window for the context menu using WebviewWindowBuilder
+      let overlay = WebviewWindowBuilder::new(
+        app,
+        "context-menu",
+        WebviewUrl::App("overlay.html".into()),
+      )
+      .title("")
+      .decorations(false)
+      .always_on_top(true)
+      .skip_taskbar(true)
+      .resizable(false)
+      .visible(false)
+      .transparent(true)
+      .focused(true)
+      .focusable(true)
+      .accept_first_mouse(true)
+      .inner_size(180.0, 120.0)
+      .build()?;
+
+      // Create a hidden overlay window for the baseline modal (covers a portion of the app)
+      let baseline_overlay = WebviewWindowBuilder::new(
+        app,
+        "baseline-modal",
+        WebviewUrl::App("baseline.html".into()),
+      )
+      .title("")
+      .decorations(false)
+      .always_on_top(true)
+      .skip_taskbar(true)
+      .resizable(false)
+      .visible(false)
+      .transparent(true)
+      .focused(true)
+      .focusable(true)
+      .accept_first_mouse(true)
+      // Give it a reasonable default size; the frontend will position it to match the main window
+      .inner_size(360.0, 220.0)
+      .build()?;
+
+      // Open dev tools automatically in debug mode for main and overlay windows
       #[cfg(debug_assertions)]
       {
-        let window = app.get_webview_window("main").unwrap();
-        window.open_devtools();
+        if let Some(window) = app.get_webview_window("main") {
+          window.open_devtools();
+        }
+        // Open devtools for overlays to help debugging
+        overlay.open_devtools();
+        baseline_overlay.open_devtools();
       }
       Ok(())
     })
