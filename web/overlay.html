@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Context Menu</title>
+<style>
+  html,body{margin:0;padding:0;background:transparent;font-family:inherit}
+  .context-menu{position:relative;background:rgba(255,255,255,0.95);border:1px solid rgba(200,200,200,0.8);border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.2);backdrop-filter:blur(10px);min-width:160px;font-size:12px;padding:4px}
+  .context-menu-item{display:block;padding:8px 12px;background:none;border:none;width:100%;text-align:left;cursor:pointer}
+  .context-menu-item:hover{background:rgba(100,100,100,0.08)}
+</style>
+</head>
+<body>
+  <div class="context-menu" id="menu">
+    <button class="context-menu-item" id="close-app">Close</button>
+    <button class="context-menu-item" id="cancel-menu">Cancel</button>
+  </div>
+<script>
+  // Minimal overlay menu script — robustly obtain invoke at runtime
+  console.log('overlay script loaded');
+  const closeBtn = document.getElementById('close-app');
+  const cancelBtn = document.getElementById('cancel-menu');
+  const menu = document.getElementById('menu');
+
+  function getInvoke() {
+    try {
+      if (window.__TAURI__) {
+        // tauri v2 bundles may expose different shapes; try a few
+        if (window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') return window.__TAURI__.core.invoke;
+        if (window.__TAURI__.tauri && typeof window.__TAURI__.tauri.invoke === 'function') return window.__TAURI__.tauri.invoke;
+        if (typeof window.__TAURI__.invoke === 'function') return window.__TAURI__.invoke;
+      }
+    } catch (e) {
+      console.warn('getInvoke check failed', e);
+    }
+    return null;
+  }
+
+  async function tryInvoke(cmd, args) {
+    const inv = getInvoke();
+    if (!inv) {
+      console.error('Tauri invoke API not available');
+      return;
+    }
+    try {
+      return await inv(cmd, args);
+    } catch (e) {
+      console.error('invoke failed', cmd, e);
+    }
+  }
+
+  closeBtn.addEventListener('click', async (e) => {
+    console.log('overlay: close clicked');
+    e.stopPropagation();
+    // Close the whole application (native command will exit process)
+    await tryInvoke('quit_app');
+  });
+
+  cancelBtn.addEventListener('click', async (e) => {
+    console.log('overlay: cancel clicked');
+    e.stopPropagation();
+    await tryInvoke('hide_context_menu');
+  });
+
+  // Clicking outside the menu should hide it
+  document.addEventListener('click', async (e) => {
+    if (!menu.contains(e.target)) {
+      console.log('overlay: outside click');
+      await tryInvoke('hide_context_menu');
+    }
+  });
+
+  // Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      console.log('overlay: escape');
+      tryInvoke('hide_context_menu');
+    }
+  });
+
+  // When overlay loads, focus the window so it receives keyboard
+  window.addEventListener('load', () => {
+    try { window.focus(); } catch (e) {}
+  });
+</script>
+</body>
+</html>

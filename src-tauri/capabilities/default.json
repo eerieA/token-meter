@@ -2,9 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
   "description": "Default capability for the main window",
-  "windows": ["main"],
+  "windows": ["main", "context-menu", "baseline-modal"],
   "permissions": [
     "core:default",
+    "core:window:allow-start-dragging",
     "app-commands"
   ]
 }
