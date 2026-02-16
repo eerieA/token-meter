@@ -2,6 +2,16 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
+  // Skip config modification in dev mode to avoid infinite rebuild loops
+  // Check if we're in debug build (dev mode) instead of environment variables
+  let is_debug = std::env::var("PROFILE").unwrap_or_default() == "debug";
+  
+  if is_debug {
+    eprintln!("[build.rs] debug build detected, skipping config modification");
+    tauri_build::build();
+    return;
+  }
+
   // Detect target OS (CARGO_CFG_TARGET_OS is preferable, fallback to TARGET triple)
   let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_else(|_| std::env::var("TARGET").unwrap_or_default());
   let is_linux = target_os.contains("linux");

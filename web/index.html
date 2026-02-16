@@ -25,7 +25,7 @@
             flex-direction: column;
             padding: 8px;
             box-sizing: border-box;
-            -webkit-app-region: drag;
+            -webkit-app-region: no-drag; /* Allow context menu on widget */
         }
 
         /* Context menu */
@@ -321,7 +321,13 @@
         window.toggleWindowOpacityRepaint = toggleWindowOpacityRepaint;
         window.forceFullWindowPaintNudge = forceFullWindowPaintNudge;
         
-        const { invoke } = window.__TAURI__.core;
+        const invoke = (window.__TAURI__?.core && typeof window.__TAURI__.core.invoke === 'function')
+            ? window.__TAURI__.core.invoke
+            : (window.__TAURI__?.tauri && typeof window.__TAURI__.tauri.invoke === 'function')
+              ? window.__TAURI__.tauri.invoke
+              : (typeof window.__TAURI__?.invoke === 'function')
+                ? window.__TAURI__.invoke
+                : null;
         const appWindow = window.__TAURI__?.window?.getCurrentWindow
             ? window.__TAURI__.window.getCurrentWindow()
             : null;
@@ -419,11 +425,46 @@
         window.hideContextMenu = hideContextMenu;
 
         function showContextMenu() {
+            console.log('showContextMenu() called');
             if (contextMenuParent && !contextMenuParent.contains(contextMenu)) {
                 contextMenuParent.appendChild(contextMenu);
+                console.log('contextMenu appended to DOM');
             }
             contextMenu.style.visibility = 'visible';
             contextMenu.style.pointerEvents = 'auto';
+            
+            // Re-attach event listeners each time menu is shown
+            const closeAppBtn = document.getElementById('close-app');
+            const cancelMenuBtn = document.getElementById('cancel-menu');
+            
+            console.log('closeAppBtn element:', closeAppBtn);
+            console.log('closeAppBtn onclick:', closeAppBtn?.onclick);
+            
+            if (closeAppBtn) {
+                closeAppBtn.addEventListener('click', async () => {
+                    console.log('Close button clicked - about to call quit_app');
+                    alert('Close button clicked - about to call quit_app');
+                    try {
+                        if (!invoke) throw new Error('invoke unavailable');
+                        console.log('invoke available, calling quit_app...');
+                        await invoke('quit_app');
+                    } catch (err) {
+                        console.error('Failed to quit app:', err);
+                        alert('Failed to quit app: ' + err);
+                    }
+                    hideContextMenu();
+                });
+            } else {
+                console.error('closeAppBtn not found!');
+            }
+
+            if (cancelMenuBtn) {
+                cancelMenuBtn.addEventListener('click', () => {
+                    hideContextMenu();
+                });
+            } else {
+                console.error('cancelMenuBtn not found!');
+            }
         }
 
         // Initialize
@@ -608,6 +649,7 @@
             try {
                 const overlayX = Math.round(window.screenX);
                 const overlayY = Math.round(window.screenY);
+                if (!invoke) throw new Error('invoke unavailable');
                 await invoke('show_baseline_modal', { x: overlayX, y: overlayY });
                 return;
             } catch (err) {
@@ -719,29 +761,46 @@
 
         // Drag functionality
         const widget = document.querySelector('.widget');
+        console.log('Widget element found:', widget);
+        
+        if (widget) {
+            console.log('Adding contextmenu event listener to widget');
+            
+            // Add mousedown event listener for drag functionality
+            widget.addEventListener('mousedown', async (e) => {
+                // Don't drag if clicking on interactive elements
+                if (e.target.closest('button') || e.target.closest('input') || e.target.closest('#baseline-modal-panel')) {
+                    return;
+                }
 
-        widget.addEventListener('mousedown', async (e) => {
-            // Don't drag if clicking on interactive elements
-            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('#baseline-modal-panel')) {
+                // Prefer native window-manager drag (fixes jitter/lag on Linux)
+                if (appWindow && typeof appWindow.startDragging === 'function') {
+                    try {
+                        await appWindow.startDragging();
+                    } catch (err) {
+                        console.error('startDragging failed:', err);
+                    }
+                }
+
+                e.preventDefault();
+            });
+        }
+        
+        // Try attaching contextmenu listener to document instead
+        console.log('Adding contextmenu event listener to document');
+        document.addEventListener('contextmenu', async (e) => {
+            console.log('document contextmenu event fired! target:', e.target);
+            
+            // Only handle if clicking on our widget
+            if (!e.target.closest('.widget')) {
+                console.log('Click not on widget, ignoring');
                 return;
             }
-
-            // Prefer native window-manager drag (fixes jitter/lag on Linux)
-            if (appWindow && typeof appWindow.startDragging === 'function') {
-                try {
-                    await appWindow.startDragging();
-                } catch (err) {
-                    console.error('startDragging failed:', err);
-                }
-            }
-
+            
+            console.log('contextmenu event fired on widget!');
             e.preventDefault();
-        });
-
-        // Context menu functionality
-        widget.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-
+            e.stopPropagation(); // Prevent Windows default menu
+            
             // Position relative to widget/window
             const x = e.clientX;
             const y = e.clientY;
@@ -761,7 +820,8 @@
 
             // Show native overlay via Tauri command
             try {
-                invoke('show_context_menu', { x: absoluteX, y: absoluteY });
+                if (!invoke) throw new Error('invoke unavailable');
+                await invoke('show_context_menu', { x: absoluteX, y: absoluteY });
             } catch (err) {
                 console.error('show_context_menu invoke failed', err);
                 // Fallback to in-DOM menu if native overlay unavailable
@@ -779,12 +839,24 @@
             }
         });
 
+        // Close context menu on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideContextMenu();
+            }
+        });
+
         // Close app handler
         closeAppBtn.addEventListener('click', async () => {
+            console.log('Close button clicked - about to call quit_app');
+            alert('Close button clicked - about to call quit_app');
             try {
-                await invoke('close_window');
+                if (!invoke) throw new Error('invoke unavailable');
+                console.log('invoke available, calling quit_app...');
+                await invoke('quit_app');
             } catch (err) {
-                console.error('Failed to close window:', err);
+                console.error('Failed to quit app:', err);
+                alert('Failed to quit app: ' + err);
             }
             hideContextMenu();
         });
@@ -792,13 +864,6 @@
         // Cancel menu handler
         cancelMenuBtn.addEventListener('click', () => {
             hideContextMenu();
-        });
-
-        // Close context menu on Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                hideContextMenu();
-            }
         });
 
         // Initialize app

@@ -188,10 +188,10 @@ async fn close_window(window: tauri::Window) -> Result<(), String> {
 
 // Close the entire application (used by the overlay 'Close' menu item)
 #[tauri::command]
-fn quit_app() {
+fn quit_app(app: tauri::AppHandle) {
   eprintln!("[tauri] quit_app invoked");
-  // Best-effort: exit the process entirely
-  std::process::exit(0);
+  // Use Tauri's native exit to ensure runtime + windows are torn down cleanly.
+  app.exit(0);
 }
 
 // Commands for the native context-menu overlay window
@@ -246,6 +246,7 @@ fn hide_baseline_modal(app: tauri::AppHandle) -> Result<(), String> {
 
 fn main() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
       get_api_key,
       get_cached_data,
@@ -278,7 +279,7 @@ fn main() {
       .focused(true)
       .focusable(true)
       .accept_first_mouse(true)
-      .inner_size(180.0, 120.0)
+      .inner_size(180.0, 60.0)
       .build()?;
 
       // Create a hidden overlay window for the baseline modal (covers a portion of the app)
