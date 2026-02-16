@@ -7,20 +7,25 @@
 <style>
   /* Make the webview exactly the size of the dialog by centering the panel and removing any full-window backdrop */
   html, body {
+    display: flex;
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
     background: transparent;
     font-family: inherit;
-    display: flex;
     align-items: center;
     justify-content: center;
+    content-visibility: auto;
     -webkit-user-select: none;
   }
 
   .panel {
-    width: 320px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    align-items: stretch;
     background: rgba(255,255,255,0.95);
     padding: 12px;
     border-radius: 8px;
@@ -40,10 +45,10 @@
       <div style="font-weight:600">Set Baseline Credit</div>
       <button id="btn-cancel" style="background:transparent;border:none;font-size:16px;cursor:pointer">✕</button>
     </div>
-    <div style="margin-top:8px">
+    <div class="row">
       <input id="amount" class="input" type="number" step="0.01" min="0" placeholder="Baseline amount (e.g. 5.10)">
     </div>
-    <div style="margin-top:8px">
+    <div class="row">
       <input id="date" class="input" type="date">
     </div>
     <div class="row">
