@@ -1,8 +1,8 @@
-#  Token Meter
+# Token Meter
 
 A lightweight token API usage & cost widget built with Rust + Tauri and a small HTML/CSS frontend.
 
-This repository is a migration from the previous Rust + egui implementation, which was preceded by a Pyside 6 implementation. the UI is now a tiny web-based widget (web/index.html) and the native layer is provided by Tauri.
+This repo is a migration from previous Pyside6 stack.
 
 <!-- TOC -->
 
@@ -11,11 +11,10 @@ This repository is a migration from the previous Rust + egui implementation, whi
     - [Project structure](#project-structure)
     - [Storage / Configuration](#storage--configuration)
     - [Running / Building](#running--building)
-    - [How the UI works](#how-the-ui-works)
     - [token API access requirements](#token-api-access-requirements)
     - [Cache & Fetch behavior](#cache--fetch-behavior)
     - [Development notes](#development-notes)
-    - [Debugging](#debugging)
+        - [Debugging](#debugging)
     - [Limitations & Future work](#limitations--future-work)
 
 <!-- /TOC -->
@@ -24,18 +23,16 @@ This repository is a migration from the previous Rust + egui implementation, whi
 
 - Borderless, draggable widget window implemented with HTML/CSS
 - Minimal web-based UI (web/index.html) talking to native Rust commands via Tauri
-- Fetches month-to-date organization usage from the token API costs API
-- Local JSON cache to avoid unnecessary API calls (cache considered stale after 1 hour)
+- Fetches month-to-date organization usage from the token API costs endpoint
+- Baseline mode: optionally record a baseline credit and compute remaining credit since the baseline start date
+- Local JSON cache to avoid too many API calls (cache considered stale after 3 minutes)
 - Retry & pagination logic for robust token API requests
 - Uses rust_decimal for accurate monetary aggregation
 - API key stored in the user's home directory (see Storage below)
 
-Windows version preview is below. Linux verision preview will be here later.
+Windows version preview is below. Linux version preview will be here later.
 
-<img alt="token meter windows ver preview" src="https://live.staticflickr.com/65535/55102591518_ba15bab69b.jpg" width="280">
-
-Visual bug: now if it says MTD (Month To Date) then that is from cache json, if it is BLR (Baseline Remaining) then the cost numer is freshly obtained. I would make them both be BLR when a baseline is present. Will fix in the future.
-
+<img alt="token meter windows ver preview" src="https://live.staticflickr.com/65535/55102591518_ba15bab69b.jpg" width="320">
 
 ## Project structure
 
@@ -43,21 +40,26 @@ Visual bug: now if it says MTD (Month To Date) then that is from cache json, if 
 .
 ├── src/                 # Core Rust library code (providers, aggregator, storage, domain)
 ├── src-tauri/           # Tauri app scaffolding and native entrypoint (build config, bundling)
-│   └── src/main.rs      # Tauri commands that the web UI invokes (move_window, fetch, cache, etc.)
+│   └── src/main.rs      # Tauri commands that the web UI invokes
 ├── web/                 # Small web UI (HTML/CSS/JS) used as the Tauri frontend
 └── package.json         # npm scripts to run/build the Tauri app
 ```
 
 Important Tauri commands exposed to the UI (see src-tauri/src/main.rs):
-- move_window(window, x, y) - move/position the native window
-- get_api_key() - returns saved API key or an error
-- get_cached_data() - returns cached MTD total if cache is still fresh
-- fetch_month_to_date(api_key) - fetches MTD total from token API and returns JSON result (and saves cache on success)
+- get_api_key() - returns saved API key (or null)
+- get_cached_data() - returns cached data (may include baseline fields) if cache is still fresh
+- fetch_month_to_date(api_key) - fetches MTD or baseline-derived remaining credit from the provider (and saves cache on success)
+- validate_api_key(api_key) - quick validation by performing a fetch
 - save_api_key_command(api_key) - writes the API key to disk
+- save_baseline_command(amount, start_iso) - persist a baseline amount and start date
+- clear_baseline_command() - remove the configured baseline
+- show_context_menu(x, y) / hide_context_menu() - native overlay for context menu
+- show_baseline_modal(x, y) / hide_baseline_modal() - native overlay for baseline modal (fallback to in-DOM modal available)
+- quit_app() - exit the application
 
 ## Storage / Configuration
 
-On first run the app needs an token API admin API key. The app stores configuration under a `.token-meter` directory in the user's home folder. Example locations:
+On first run the app requires an admin token API key (able to read organization costs/usage). The app stores configuration under a `.token-meter` directory in the user's home folder. Example locations:
 
 - Unix/macOS: ~/.token-meter/
 - Windows: C:\Users\<you>\.token-meter\
@@ -67,10 +69,18 @@ Files created:
 ```
 ~/.token-meter/
 ├── credentials.json    # { "openai_api_key": "..." }
-└── api_usage.json      # cached data, timestamps, baseline info
+└── api_usage.json      # cached data, timestamps, baseline metadata, baseline aggregates
 ```
 
-Note: the code uses the user's home directory for storage (env::home_dir()).
+api_usage.json fields of interest:
+- openai_total: the month-to-date total fetched from the provider (string)
+- fetched_at: ISO timestamp when those values were saved
+- baseline: optional object { amount, start_iso }
+- baseline_used: optional string representing usage since baseline start
+- baseline_remaining: optional string representing baseline amount minus used
+
+Behavior notes:
+- When a baseline is configured, the app computes used & remaining and saves baseline_used / baseline_remaining without overwriting openai_total. This lets the app show either MTD totals or baseline remaining depending on context.
 
 ## Running / Building
 
@@ -83,73 +93,58 @@ Quick start (development):
 Option A - standard Tauri workflow via npm (recommended):
 
 ```bash
-%  Install JS deps
+// Install JS deps
 npm install
 
-%  Run the app in dev mode (this runs the Tauri dev workflow)
+// Run the app in dev mode (this runs the Tauri dev workflow)
 npm run dev
 ```
 
-Option B - using the cargo-tauri commands directly:
+Option B - using the cargo/tauri commands directly:
 
 ```bash
-%  If you don't have the tauri CLI installed, install it first
+// If you don't have the tauri CLI installed, install it first
 cargo install tauri-cli
 
-%  Run the app in dev mode (hot-reloads frontend and native)
+// Run the app in dev mode (hot-reloads frontend and native)
 cargo tauri dev
 ```
 
 Build for release:
 
-Option A - via npm (uses the local Tauri CLI):
-
 ```bash
+// via npm (uses the local Tauri CLI)
 npm run build
-%  The produced bundles are in src-tauri/target/release/bundle (platform-dependent)
-```
+// Bundles will be in src-tauri/target/release/bundle
 
-Option B - with cargo-tauri directly:
-
-```bash
-%  Produce release bundles using the tauri CLI
+// or with the Tauri CLI directly
 cargo tauri build
-%  Bundles will appear under src-tauri/target/release/bundle (platform-dependent)
 ```
 
-. Or with very verbose log and save the log in a file.
+For a very verbose build log:
 
 ```bash
 cargo build --release -vv 2>&1 | tee build.log
 ```
 
-`npm run dev` is convenient when working on the web frontend; `cargo tauri dev` is useful if you prefer invoking the native tooling directly.
-
-## How the UI works
-
-The web UI (web/index.html) is intentionally minimal. It:
-- Invokes Tauri commands to read/save the API key and to fetch cached or fresh usage
-- Displays MTD (month-to-date) cost and a status line
-- Allows manual refresh via a button
-- Implements dragging using a small drag-handle and the move_window Tauri command
-
 ## token API access requirements
 
-- An admin API key that can read organization costs/usage is required.
+- An admin API key that can read organization costs/usage is required (this project has an OpenAI provider implementation as an example). The key is stored locally in credentials.json.
 
 ## Cache & Fetch behavior
 
-- Cache is considered fresh for 1 hour. If cache is fresh, the UI will show cached data on startup.
-- fetch_month_to_date will query the token API organization costs endpoint, handling pagination and retry/backoff for transient errors.
-- On successful fetch the native code saves the total to api_usage.json so subsequent starts can display cached data quickly.
+- Cache is considered fresh for 3 minutes. If cache is fresh, the UI will show cached data on startup.
+- When a baseline is configured, fetch_month_to_date computes usage since the baseline start date and returns the remaining amount (baseline - used). The native code saves baseline_used and baseline_remaining to the cache so the frontend can show BLR from cache without re-querying.
+- When no baseline is present, the app fetches month-to-date totals from the provider and saves openai_total.
+- fetch_month_to_date handles pagination and retries/backoff for transient errors.
 
 ## Development notes
 
 - Network requests use reqwest; async code uses tokio
 - Monetary aggregation uses rust_decimal to avoid floating-point rounding errors
-- Errors and transient HTTP failures are retried with exponential backoff (see providers/openai.rs)
+- Errors and transient HTTP failures are retried with exponential backoff (see src/providers/openai.rs)
 
-## Debugging
+### Debugging
 
 You can enable more verbose Rust logging with:
 
@@ -157,10 +152,9 @@ You can enable more verbose Rust logging with:
 RUST_LOG=debug npm run dev
 ```
 
-Or run the Rust binary directly with RUST_LOG set.
-
-On Ubuntu and such, if use a terminal that is related to snap, dev run commands like `npm run dev` might encounter some lib paths issue. In such cases, try running in a clean system terminal.
+If you run into environment issues on Linux (snap-related terminals, etc.), try running in a clean system terminal.
 
 ## Limitations & Future work
 
-- No multi-provider UI (the code is structured to add other providers)
+- No multi-provider UI yet (the code is structured to add other providers easily)
+- UI/UX polishing, unit tests, packaging improvements and more robust config handling are future tasks
