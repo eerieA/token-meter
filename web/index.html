@@ -511,7 +511,8 @@
 
         function updateUI(cost, status) {
             // If the status indicates a baseline response, label differently
-            const isBaseline = typeof status === 'string' && status.includes('With baseline');
+            // Treat both explicit 'With baseline' responses and cached messages that mention 'baseline'
+            const isBaseline = typeof status === 'string' && (status.includes('With baseline') || status.toLowerCase().includes('baseline'));
 
             if (cost !== null) {
                 if (isBaseline) {
@@ -528,6 +529,7 @@
             statusEl.textContent = `Status: ${status}${autoRefreshIndicator}`;
             currentStatus = status;
         }
+
 
         function startAutoRefresh() {
             // Clear any existing interval
