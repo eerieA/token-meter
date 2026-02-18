@@ -271,6 +271,7 @@ fn main() {
       )
       .title("")
       .decorations(false)
+      .shadow(false)
       .always_on_top(true)
       .skip_taskbar(true)
       .resizable(false)
@@ -279,7 +280,7 @@ fn main() {
       .focused(true)
       .focusable(true)
       .accept_first_mouse(true)
-      .inner_size(132.0, 72.0)
+      .inner_size(96.0, 64.0)
       .build()?;
 
       // Create a hidden overlay window for the baseline modal (covers a portion of the app)
@@ -290,6 +291,7 @@ fn main() {
       )
       .title("")
       .decorations(false)
+      .shadow(false)
       .always_on_top(true)
       .skip_taskbar(true)
       .resizable(false)
@@ -299,7 +301,7 @@ fn main() {
       .focusable(true)
       .accept_first_mouse(true)
       // Give it a reasonable default size; the frontend will position it to match the main window
-      .inner_size(250.0, 160.0)
+      .inner_size(230.0, 120.0)
       .build()?;
 
       // Open dev tools automatically in debug mode for main and overlay windows

@@ -8,8 +8,9 @@
 html,body{
   display: flex;
   flex-direction: row;
-  width: 100%;
-  height: 100%;
+  /* better explicitly be same with size defined for it in main.rs */
+  width: 96px;
+  height: 64px;
   margin:0;
   padding:0;
   background:transparent;
@@ -23,15 +24,17 @@ html,body{
   padding: 0px;
   background:rgba(255,255,255,0.95);
   border:1px solid rgba(200,200,200,0.8);
-  border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.2);
+  border-radius:1px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.2);
   backdrop-filter:blur(10px);
   font-size:12px;padding:4px
   }
 .context-menu-item{
   display:block;
-  padding:8px 12px;
+  padding:2px 2px;
   background:none;
   border:none;
+  font-size: 12px;
   width:100%;
   height:50%;
   text-align:left;

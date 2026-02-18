@@ -1,4 +1,4 @@
-%  Token Meter
+#  Token Meter
 
 A lightweight token API usage & cost widget built with Rust + Tauri and a small HTML/CSS frontend.
 
@@ -6,16 +6,17 @@ This repository is a migration from the previous Rust + egui implementation, whi
 
 <!-- TOC -->
 
-- [Features](#features)
-- [Project structure](#project-structure)
-- [Storage / Configuration](#storage--configuration)
-- [Running / Building](#running--building)
-- [How the UI works](#how-the-ui-works)
-- [token API access requirements](#token-api-access-requirements)
-- [Cache & Fetch behavior](#cache--fetch-behavior)
-- [Development notes](#development-notes)
-- [Debugging](#debugging)
-- [Limitations & Future work](#limitations--future-work)
+- [Token Meter](#token-meter)
+    - [Features](#features)
+    - [Project structure](#project-structure)
+    - [Storage / Configuration](#storage--configuration)
+    - [Running / Building](#running--building)
+    - [How the UI works](#how-the-ui-works)
+    - [token API access requirements](#token-api-access-requirements)
+    - [Cache & Fetch behavior](#cache--fetch-behavior)
+    - [Development notes](#development-notes)
+    - [Debugging](#debugging)
+    - [Limitations & Future work](#limitations--future-work)
 
 <!-- /TOC -->
 
@@ -28,6 +29,13 @@ This repository is a migration from the previous Rust + egui implementation, whi
 - Retry & pagination logic for robust token API requests
 - Uses rust_decimal for accurate monetary aggregation
 - API key stored in the user's home directory (see Storage below)
+
+Windows version preview is below. Linux verision preview will be here later.
+
+<img alt="token meter windows ver preview" src="https://live.staticflickr.com/65535/55102591518_ba15bab69b.jpg" width="280">
+
+Visual bug: now if it says MTD (Month To Date) then that is from cache json, if it is BLR (Baseline Remaining) then the cost numer is freshly obtained. I would make them both be BLR when a baseline is present. Will fix in the future.
+
 
 ## Project structure
 
