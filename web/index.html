@@ -113,6 +113,7 @@
 
         .status {
             font-size: 12px;
+            line-height: 14px;
             color: rgba(236, 241, 241, 0.8);
             text-shadow: -1px 1px 1px rgba(115, 121, 120, 0.8);
             width: 100%;
@@ -120,6 +121,14 @@
             border-radius: 2px;
             border: 1px solid rgba(236, 241, 241, 0.5);
             background-color: rgba(115, 121, 120, 1.0);
+            /* Reserve space for up to 2 lines to avoid layout jumps and compositor ghosting */
+            min-height: 28px; /* ~2 * line-height */
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            text-overflow: ellipsis;
+            white-space: normal;
         }
 
         .refresh-button {
@@ -527,6 +536,8 @@
             // Add auto-refresh indicator to status
             const autoRefreshIndicator = autoRefreshInterval ? ' (Auto: ON)' : '';
             statusEl.textContent = `Status: ${status}${autoRefreshIndicator}`;
+            // Show full status text on hover (tooltip) so we can safely clamp/truncate the visible text
+            try { statusEl.title = `${status}${autoRefreshIndicator}`; } catch (e) { /* ignore if element missing */ }
             currentStatus = status;
         }
 
