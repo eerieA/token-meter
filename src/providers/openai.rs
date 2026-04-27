@@ -5,6 +5,7 @@ use rust_decimal::Decimal;
 use std::time::Duration;
 
 const OPENAI_API_BASE: &str = "https://api.openai.com/v1";
+const OPENAI_API_COSTS: &str = "/organization/costs";
 const MAX_RETRIES: usize = 3;
 
 #[derive(Debug, Deserialize)]
@@ -67,7 +68,7 @@ impl OpenAIProvider {
                 params.push(("page".to_string(), p.clone()));
             }
 
-            let url = format!("{}/organization/costs", OPENAI_API_BASE);
+            let url = format!("{}{}", OPENAI_API_BASE, OPENAI_API_COSTS);
 
             let resp = self
                 .do_get_with_retries(&url, &params)
