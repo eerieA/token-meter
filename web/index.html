@@ -313,9 +313,9 @@
         </div>
     </div>
 
-    <!-- Context Menu -->
+    <!-- Default/fallback context Menu -->
     <div id="context-menu" class="context-menu">
-        <button class="context-menu-item" id="close-app">Close</button>
+        <button class="context-menu-item" id="close-app">Quit app</button>
         <button class="context-menu-item" id="cancel-menu">Cancel</button>
     </div>
 
@@ -368,13 +368,13 @@
         const setupError = document.getElementById('setup-error');
         const setupSuccess = document.getElementById('setup-success');
 
-        // Context menu elements
+        // Fallback in-window context menu elements (used only if the native overlay fails)
         const contextMenu = document.getElementById('context-menu');
         const closeAppBtn = document.getElementById('close-app');
         const cancelMenuBtn = document.getElementById('cancel-menu');
 
         const baselineModalParent = baselineModal.parentElement;
-        const contextMenuParent = contextMenu.parentElement;
+
 
         function forceWidgetRepaint() {
             // Workaround for Linux transparent window repaint artifacts (stale pixels)
@@ -410,71 +410,50 @@
             baselineModal.setAttribute('aria-hidden', 'false');
         }
 
+        // Shared hide helper: hides both the native overlay menu (if running under Tauri)
+        // and the in-window fallback menu (if present).
         export function hideContextMenu() {
             console.log('hideContextMenu called');
-            // hide any in-DOM menu if present
-            try {
-              contextMenu.style.display = 'none';
-              contextMenu.style.visibility = 'hidden';
-              contextMenu.style.pointerEvents = 'none';
-              contextMenu.style.left = '';
-              contextMenu.style.top = '';
-              if (contextMenuParent && contextMenu.parentElement) {
-                contextMenu.remove();
-              }
-            } catch (e) {
-              // ignore if DOM not present in this window
+
+            // Hide any in-DOM fallback menu if present
+            if (contextMenu) {
+                contextMenu.style.display = 'none';
+                contextMenu.style.visibility = 'hidden';
+                contextMenu.style.pointerEvents = 'none';
+                contextMenu.style.left = '';
+                contextMenu.style.top = '';
             }
+
             forceWidgetRepaint();
             if (window.forceFullWindowPaintNudge) window.forceFullWindowPaintNudge();
+
             // Also tell the native overlay (if any) to hide
-            try { invoke('hide_context_menu'); } catch (e) { /* ignore */ }
+            if (invoke) {
+                try {
+                    invoke('hide_context_menu');
+                } catch (e) {
+                    // ignore if Tauri is not available or the window is missing
+                }
+            }
         }
+
         // attach hideContextMenu so non-module code can call it
         window.hideContextMenu = hideContextMenu;
 
-        function showContextMenu() {
-            console.log('showContextMenu() called');
-            if (contextMenuParent && !contextMenuParent.contains(contextMenu)) {
-                contextMenuParent.appendChild(contextMenu);
-                console.log('contextMenu appended to DOM');
-            }
-            contextMenu.style.visibility = 'visible';
-            contextMenu.style.pointerEvents = 'auto';
-            
-            // Re-attach event listeners each time menu is shown
-            const closeAppBtn = document.getElementById('close-app');
-            const cancelMenuBtn = document.getElementById('cancel-menu');
-            
-            console.log('closeAppBtn element:', closeAppBtn);
-            console.log('closeAppBtn onclick:', closeAppBtn?.onclick);
-            
-            if (closeAppBtn) {
-                closeAppBtn.addEventListener('click', async () => {
-                    console.log('Close button clicked - about to call quit_app');
-                    alert('Close button clicked - about to call quit_app');
-                    try {
-                        if (!invoke) throw new Error('invoke unavailable');
-                        console.log('invoke available, calling quit_app...');
-                        await invoke('quit_app');
-                    } catch (err) {
-                        console.error('Failed to quit app:', err);
-                        alert('Failed to quit app: ' + err);
-                    }
-                    hideContextMenu();
-                });
-            } else {
-                console.error('closeAppBtn not found!');
+        // Simple in-window fallback menu; used only when the native overlay context menu cannot be shown (e.g. Tauri invoke not available).
+        function showContextMenu(x, y) {
+            if (!contextMenu) {
+                console.warn('Fallback context menu requested but not present in DOM');
+                return;
             }
 
-            if (cancelMenuBtn) {
-                cancelMenuBtn.addEventListener('click', () => {
-                    hideContextMenu();
-                });
-            } else {
-                console.error('cancelMenuBtn not found!');
-            }
+            contextMenu.style.visibility = 'visible';
+            contextMenu.style.pointerEvents = 'auto';
+            contextMenu.style.left = x + 'px';
+            contextMenu.style.top = y + 'px';
+            contextMenu.style.display = 'block';
         }
+
 
         // Initialize
         async function init() {
@@ -836,21 +815,23 @@
                 if (!invoke) throw new Error('invoke unavailable');
                 await invoke('show_context_menu', { x: absoluteX, y: absoluteY });
             } catch (err) {
-                console.error('show_context_menu invoke failed', err);
-                // Fallback to in-DOM menu if native overlay unavailable
-                showContextMenu();
-                contextMenu.style.left = adjustedX + 'px';
-                contextMenu.style.top = adjustedY + 'px';
-                contextMenu.style.display = 'block';
+                // If Tauri is unavailable or the overlay window cannot be shown,
+                // fall back to the lightweight in-window HTML menu.
+                console.error('show_context_menu invoke failed, using fallback HTML menu', err);
+                showContextMenu(adjustedX, adjustedY);
             }
         });
 
+
         // Close context menu when clicking elsewhere
         document.addEventListener('click', (e) => {
-            if (!contextMenu.contains(e.target)) {
+            // Clicking anywhere in the main window should hide the native overlay,
+            // and also hide the in-window fallback menu if the click is outside it.
+            if (!contextMenu || !contextMenu.contains(e.target)) {
                 hideContextMenu();
             }
         });
+
 
         // Close context menu on Escape key
         document.addEventListener('keydown', (e) => {
@@ -859,25 +840,25 @@
             }
         });
 
-        // Close app handler
-        closeAppBtn.addEventListener('click', async () => {
-            console.log('Close button clicked - about to call quit_app');
-            alert('Close button clicked - about to call quit_app');
-            try {
-                if (!invoke) throw new Error('invoke unavailable');
-                console.log('invoke available, calling quit_app...');
-                await invoke('quit_app');
-            } catch (err) {
-                console.error('Failed to quit app:', err);
-                alert('Failed to quit app: ' + err);
-            }
-            hideContextMenu();
-        });
+        // Fallback menu: quit and cancel actions.
+        if (closeAppBtn) {
+            closeAppBtn.addEventListener('click', async () => {
+                try {
+                    if (!invoke) throw new Error('invoke unavailable');
+                    await invoke('quit_app');
+                } catch (err) {
+                    console.error('Failed to quit app from fallback menu:', err);
+                }
+                hideContextMenu();
+            });
+        }
 
-        // Cancel menu handler
-        cancelMenuBtn.addEventListener('click', () => {
-            hideContextMenu();
-        });
+        if (cancelMenuBtn) {
+            cancelMenuBtn.addEventListener('click', () => {
+                hideContextMenu();
+            });
+        }
+
 
         // Initialize app
         console.log('Script loaded, calling init()');
