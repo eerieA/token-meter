@@ -25,7 +25,7 @@
             flex-direction: column;
             padding: 8px;
             box-sizing: border-box;
-            -webkit-app-region: no-drag; /* Allow context menu on widget */
+            -webkit-app-region: no-drag;
         }
 
         /* Context menu */
@@ -75,10 +75,33 @@
 
         .header {
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             align-items: center;
             height: 20px;
             margin-bottom: 4px;
+        }
+
+        /* Provider toggle pills */
+        .provider-toggle {
+            display: flex;
+            gap: 3px;
+        }
+
+        .provider-btn {
+            padding: 1px 5px;
+            font-size: 10px;
+            border: 1px solid rgba(115, 121, 120, 0.5);
+            border-radius: 3px;
+            background: transparent;
+            color: rgba(80, 80, 80, 0.7);
+            cursor: pointer;
+            -webkit-app-region: no-drag;
+        }
+
+        .provider-btn.active {
+            background: rgb(115, 121, 120);
+            color: white;
+            border-color: rgb(115, 121, 120);
         }
 
         .drag-handle {
@@ -117,12 +140,11 @@
             color: rgba(236, 241, 241, 0.8);
             text-shadow: -1px 1px 1px rgba(115, 121, 120, 0.8);
             width: 100%;
-            padding:0px 2px 0px 2px;
+            padding: 0px 2px 0px 2px;
             border-radius: 2px;
             border: 1px solid rgba(236, 241, 241, 0.5);
             background-color: rgba(115, 121, 120, 1.0);
-            /* Reserve space for up to 2 lines to avoid layout jumps and compositor ghosting */
-            min-height: 28px; /* ~2 * line-height */
+            min-height: 28px;
             overflow: hidden;
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -151,18 +173,12 @@
             background: rgb(100, 100, 100);
         }
 
-        .setup-container {
+        /* Add key inline panel */
+        #add-key-container {
             display: none;
             flex-direction: column;
-            padding: 8px;
-        }
-
-        .setup-title {
-            font-size: 14px;
-            font-weight: bold;
-            color: rgb(80, 80, 80);
-            margin-bottom: 8px;
-            text-align: center;
+            gap: 4px;
+            margin-top: 2px;
         }
 
         .setup-input {
@@ -171,8 +187,8 @@
             border: 1px solid rgb(189, 201, 200);
             border-radius: 2px;
             font-size: 12px;
-            margin-bottom: 8px;
             background: rgba(255, 255, 255, 0.8);
+            box-sizing: border-box;
             -webkit-app-region: no-drag;
         }
 
@@ -200,14 +216,12 @@
         .setup-error {
             font-size: 11px;
             color: rgb(200, 50, 50);
-            margin-top: 4px;
             text-align: center;
         }
 
         .setup-success {
             font-size: 11px;
             color: rgb(50, 200, 50);
-            margin-top: 4px;
             text-align: center;
         }
 
@@ -216,7 +230,6 @@
             position: fixed;
             inset: 0;
             z-index: 9999;
-            /* put the modal out of the document flow and center its contents */
             display: flex;
             align-items: center;
             justify-content: center;
@@ -224,7 +237,6 @@
         }
 
         #baseline-modal-backdrop {
-            /* backdrop should cover the modal container (widget area) */
             position: absolute;
             inset: 0;
             background: rgba(0, 0, 0, 0.35);
@@ -235,7 +247,6 @@
         #baseline-modal-panel {
             position: relative;
             z-index: 2;
-            /* make the modal a little smaller than the normal UI and responsive */
             width: min(85%, 180px);
             max-width: 90vw;
             height: 90%;
@@ -244,26 +255,29 @@
             border-radius: 8px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
             box-sizing: border-box;
-            /* prevent the modal from being cut off on short windows */
             max-height: calc(100vh - 20px);
             overflow-y: auto;
             -webkit-app-region: no-drag;
-            /* allow interacting with modal inputs */
         }
     </style>
 </head>
 
 <body>
     <div class="widget">
-        <!-- <div class="header">
-            <div class="drag-handle">⋮⋮</div>
-        </div> -->
         <div class="content">
             <!-- Normal Display -->
             <div id="normal-display">
-                <div
-                    style="display:flex; flex-direction: column; justify-content:space-between; align-items:center; gap:8px;">
-                    <div class="cost" id="cost">MTD: $12.34</div>
+                <!-- Header: provider toggle + drag handle -->
+                <div class="header">
+                    <div class="provider-toggle">
+                        <button class="provider-btn active" id="btn-openai">OAI</button>
+                        <button class="provider-btn" id="btn-anthropic">ANT</button>
+                    </div>
+                    <div class="drag-handle">⋮⋮</div>
+                </div>
+
+                <div style="display:flex; flex-direction: column; justify-content:space-between; align-items:center; gap:8px;">
+                    <div class="cost" id="cost">MTD: $--:--</div>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button class="refresh-button" id="refresh-btn">Refresh</button>
                         <button class="refresh-button" id="baseline-toggle-btn">Baseline</button>
@@ -271,26 +285,22 @@
                     <div class="status" id="status">Status: Ready</div>
                 </div>
 
-
-            </div>
-
-            <!-- Setup Display -->
-            <div class="setup-container" id="setup-container">
-                <div class="setup-title">Setup Required</div>
-                <form id="api-key-form" onsubmit="return false;">
-                    <input type="text" name="username" autocomplete="username" style="display: none;">
-                    <input type="password" class="setup-input" id="api-key-input" placeholder="Enter OpenAI API Key"
-                        autocomplete="new-password">
-                    <button type="submit" class="setup-button" id="save-api-btn">Save & Start</button>
-                </form>
-                <div class="setup-error" id="setup-error" style="display: none;"></div>
-                <div class="setup-success" id="setup-success" style="display: none;"></div>
+                <!-- Add key inline panel (shown when active provider has no key) -->
+                <div id="add-key-container">
+                    <form id="api-key-form" onsubmit="return false;">
+                        <input type="text" name="username" autocomplete="username" style="display: none;">
+                        <input type="password" class="setup-input" id="api-key-input" placeholder="Enter API Key"
+                            autocomplete="new-password">
+                        <button type="submit" class="setup-button" id="save-api-btn">Save & Validate</button>
+                    </form>
+                    <div class="setup-error" id="setup-error" style="display: none;"></div>
+                    <div class="setup-success" id="setup-success" style="display: none;"></div>
+                </div>
             </div>
         </div>
     </div>
 
-
-    <!-- Baseline Modal -->
+    <!-- Baseline Modal (in-DOM fallback) -->
     <div id="baseline-modal" style="display:none;" aria-hidden="true">
         <div id="baseline-modal-backdrop"></div>
         <div id="baseline-modal-panel" role="dialog" aria-modal="true" aria-labelledby="baseline-modal-title">
@@ -313,7 +323,7 @@
         </div>
     </div>
 
-    <!-- Default/fallback context Menu -->
+    <!-- Default/fallback context menu -->
     <div id="context-menu" class="context-menu">
         <button class="context-menu-item" id="close-app">Quit app</button>
         <button class="context-menu-item" id="cancel-menu">Cancel</button>
@@ -329,7 +339,7 @@
         window.forceCssRepaint = forceCssRepaint;
         window.toggleWindowOpacityRepaint = toggleWindowOpacityRepaint;
         window.forceFullWindowPaintNudge = forceFullWindowPaintNudge;
-        
+
         const invoke = (window.__TAURI__?.core && typeof window.__TAURI__.core.invoke === 'function')
             ? window.__TAURI__.core.invoke
             : (window.__TAURI__?.tauri && typeof window.__TAURI__.tauri.invoke === 'function')
@@ -341,12 +351,16 @@
             ? window.__TAURI__.window.getCurrentWindow()
             : null;
 
-        // State
+        // ── Elements (declared first so helpers can reference them) ─────────
+        const widget = document.querySelector('.widget');
+
+        // ── State ────────────────────────────────────────────────────────────
+        let activeProvider = 'openai'; // 'openai' | 'anthropic'
         let currentCost = null;
         let currentStatus = 'Loading...';
         let autoRefreshInterval = null;
 
-        // Elements
+        // ── Elements ─────────────────────────────────────────────────────────
         const costEl = document.getElementById('cost');
         const statusEl = document.getElementById('status');
         const refreshBtn = document.getElementById('refresh-btn');
@@ -360,44 +374,205 @@
         const modalClearBtn = document.getElementById('modal-clear-baseline-btn');
         const modalError = document.getElementById('modal-baseline-error');
         const modalSuccess = document.getElementById('modal-baseline-success');
-        const normalDisplay = document.getElementById('normal-display');
-        const setupContainer = document.getElementById('setup-container');
+        const addKeyContainer = document.getElementById('add-key-container');
         const apiKeyForm = document.getElementById('api-key-form');
         const apiKeyInput = document.getElementById('api-key-input');
         const saveApiBtn = document.getElementById('save-api-btn');
         const setupError = document.getElementById('setup-error');
         const setupSuccess = document.getElementById('setup-success');
-
-        // Fallback in-window context menu elements (used only if the native overlay fails)
+        const btnOpenAI = document.getElementById('btn-openai');
+        const btnAnthropic = document.getElementById('btn-anthropic');
         const contextMenu = document.getElementById('context-menu');
         const closeAppBtn = document.getElementById('close-app');
         const cancelMenuBtn = document.getElementById('cancel-menu');
-
         const baselineModalParent = baselineModal.parentElement;
 
-
-        function forceWidgetRepaint() {
-            // Workaround for Linux transparent window repaint artifacts (stale pixels)
-            // by forcing a one-frame compositing change.
-            widget.style.transform = 'translateZ(0)';
-            requestAnimationFrame(() => {
-                widget.style.transform = '';
+        // ── Provider toggle ───────────────────────────────────────────────────
+        function setActiveProvider(p) {
+            activeProvider = p;
+            btnOpenAI.classList.toggle('active', p === 'openai');
+            btnAnthropic.classList.toggle('active', p === 'anthropic');
+            currentCost = null;
+            hideAddKeyPanel();
+            // Update display immediately so the prefix reflects the new provider
+            updateUI(null, 'Switching...');
+            loadProvider().catch(e => {
+                console.error('loadProvider error:', e);
+                updateUI(null, 'Error: ' + e);
             });
+        }
+
+        btnOpenAI.addEventListener('click', () => setActiveProvider('openai'));
+        btnAnthropic.addEventListener('click', () => setActiveProvider('anthropic'));
+
+        // ── Key helpers ───────────────────────────────────────────────────────
+        async function getActiveKey() {
+            return activeProvider === 'openai'
+                ? invoke('get_api_key')
+                : invoke('get_anthropic_api_key');
+        }
+
+        async function saveActiveKey(key) {
+            return activeProvider === 'openai'
+                ? invoke('save_api_key_command', { apiKey: key })
+                : invoke('save_anthropic_api_key_command', { apiKey: key });
+        }
+
+        async function validateActiveKey(key) {
+            return activeProvider === 'openai'
+                ? invoke('validate_api_key', { apiKey: key })
+                : invoke('validate_anthropic_api_key', { apiKey: key });
+        }
+
+        async function fetchActiveProvider(key) {
+            return activeProvider === 'openai'
+                ? invoke('fetch_month_to_date', { apiKey: key })
+                : invoke('fetch_anthropic_month_to_date', { apiKey: key });
+        }
+
+        function getCachedForProvider(cachedData) {
+            if (!cachedData) return null;
+            return activeProvider === 'openai' ? cachedData.openai : cachedData.anthropic;
+        }
+
+        // ── Add-key panel ─────────────────────────────────────────────────────
+        function showAddKeyPanel() {
+            addKeyContainer.style.display = 'flex';
+            apiKeyInput.value = '';
+            apiKeyInput.placeholder = activeProvider === 'openai' ? 'Enter OpenAI API Key' : 'Enter Anthropic Admin Key';
+            setupError.style.display = 'none';
+            setupSuccess.style.display = 'none';
+            apiKeyInput.focus();
+        }
+
+        function hideAddKeyPanel() {
+            addKeyContainer.style.display = 'none';
+            setupError.style.display = 'none';
+            setupSuccess.style.display = 'none';
+        }
+
+        async function saveApiKey() {
+            const key = apiKeyInput.value.trim();
+            if (!key) { showKeyError('Please enter an API key'); return; }
+            saveApiBtn.disabled = true;
+            saveApiBtn.textContent = 'Validating...';
+            try {
+                const validation = await validateActiveKey(key);
+                if (validation.success) {
+                    await saveActiveKey(key);
+                    setupSuccess.textContent = 'Saved!';
+                    setupSuccess.style.display = 'block';
+                    setupError.style.display = 'none';
+                    setTimeout(async () => {
+                        hideAddKeyPanel();
+                        await loadProvider();
+                        startAutoRefresh();
+                    }, 800);
+                } else {
+                    showKeyError('Invalid key: ' + validation.error);
+                }
+            } catch (e) {
+                showKeyError('Error: ' + e);
+            } finally {
+                saveApiBtn.disabled = false;
+                saveApiBtn.textContent = 'Save & Validate';
+            }
+        }
+
+        function showKeyError(msg) {
+            setupError.textContent = msg;
+            setupError.style.display = 'block';
+            setupSuccess.style.display = 'none';
+        }
+
+        // ── Load / refresh ────────────────────────────────────────────────────
+        async function loadProvider() {
+            const key = await getActiveKey();
+            if (!key) {
+                costEl.textContent = activeProvider === 'openai' ? 'OAI: $--:--' : 'ANT: $--:--';
+                statusEl.textContent = 'Status: No API key';
+                showAddKeyPanel();
+                return;
+            }
+            // Try cache first — but only use it if data is actually present.
+            // If only baseline config is cached (no prior successful fetch), fall through to fetch.
+            try {
+                const cachedData = await invoke('get_cached_data');
+                const cached = getCachedForProvider(cachedData);
+                if (cached && cached.data !== null && cached.data !== undefined) {
+                    const statusMsg = cached.status || 'From cache';
+                    const label = cached.baseline
+                        ? `${statusMsg} (baseline ${cached.baseline.amount} from ${cached.baseline.start_iso})`
+                        : statusMsg;
+                    updateUI(cached.data, label);
+                    currentCost = cached.data;
+                    return;
+                }
+            } catch (e) { /* fall through to fresh fetch */ }
+            await fetchFreshData();
+        }
+
+        async function fetchFreshData() {
+            const key = await getActiveKey();
+            if (!key) return;
+            currentStatus = 'Fetching...';
+            updateUI(currentCost, currentStatus);
+            try {
+                const result = await fetchActiveProvider(key);
+                if (result.success) {
+                    currentCost = result.data;
+                    currentStatus = result.status || 'Fetched';
+                    updateUI(result.data, currentStatus);
+                } else {
+                    currentStatus = 'Failed: ' + result.error;
+                    updateUI(currentCost, currentStatus);
+                }
+            } catch (e) {
+                currentStatus = 'Error: ' + e;
+                updateUI(currentCost, currentStatus);
+            }
+        }
+
+        // ── UI helpers ────────────────────────────────────────────────────────
+        function updateUI(cost, status) {
+            const isBaseline = typeof status === 'string' &&
+                (status.includes('With baseline') || status.toLowerCase().includes('baseline'));
+            const prefix = activeProvider === 'openai' ? 'OAI' : 'ANT';
+
+            if (cost !== null && cost !== undefined) {
+                const label = isBaseline ? 'BLR' : 'MTD';
+                costEl.textContent = `${prefix} ${label}: $${parseFloat(cost).toFixed(2)}`;
+            } else {
+                costEl.textContent = `${prefix}: $--:--`;
+            }
+
+            const autoIndicator = autoRefreshInterval ? ' (Auto: ON)' : '';
+            statusEl.textContent = `Status: ${status}${autoIndicator}`;
+            try { statusEl.title = `${status}${autoIndicator}`; } catch (e) {}
+            currentStatus = status;
+        }
+
+        function startAutoRefresh() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            autoRefreshInterval = setInterval(() => fetchFreshData(), 180000);
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) { clearInterval(autoRefreshInterval); autoRefreshInterval = null; }
+        }
+
+        // ── Baseline modal ────────────────────────────────────────────────────
+        function forceWidgetRepaint() {
+            widget.style.transform = 'translateZ(0)';
+            requestAnimationFrame(() => { widget.style.transform = ''; });
         }
 
         function hideBaselineModal() {
             baselineModal.style.display = 'none';
-            baselineModal.style.position = '';
-            baselineModal.style.left = '';
-            baselineModal.style.top = '';
-            baselineModal.style.width = '';
-            baselineModal.style.height = '';
             baselineModal.style.visibility = 'hidden';
             baselineModal.style.pointerEvents = 'none';
             baselineModal.setAttribute('aria-hidden', 'true');
-            if (baselineModalParent && baselineModal.parentElement) {
-                baselineModal.remove();
-            }
+            if (baselineModalParent && baselineModal.parentElement) baselineModal.remove();
             forceWidgetRepaint();
         }
 
@@ -410,254 +585,29 @@
             baselineModal.setAttribute('aria-hidden', 'false');
         }
 
-        // Shared hide helper: hides both the native overlay menu (if running under Tauri)
-        // and the in-window fallback menu (if present).
-        export function hideContextMenu() {
-            console.log('hideContextMenu called');
-
-            // Hide any in-DOM fallback menu if present
-            if (contextMenu) {
-                contextMenu.style.display = 'none';
-                contextMenu.style.visibility = 'hidden';
-                contextMenu.style.pointerEvents = 'none';
-                contextMenu.style.left = '';
-                contextMenu.style.top = '';
-            }
-
-            forceWidgetRepaint();
-            if (window.forceFullWindowPaintNudge) window.forceFullWindowPaintNudge();
-
-            // Also tell the native overlay (if any) to hide
-            if (invoke) {
-                try {
-                    invoke('hide_context_menu');
-                } catch (e) {
-                    // ignore if Tauri is not available or the window is missing
-                }
-            }
-        }
-
-        // attach hideContextMenu so non-module code can call it
-        window.hideContextMenu = hideContextMenu;
-
-        // Simple in-window fallback menu; used only when the native overlay context menu cannot be shown (e.g. Tauri invoke not available).
-        function showContextMenu(x, y) {
-            if (!contextMenu) {
-                console.warn('Fallback context menu requested but not present in DOM');
-                return;
-            }
-
-            contextMenu.style.visibility = 'visible';
-            contextMenu.style.pointerEvents = 'auto';
-            contextMenu.style.left = x + 'px';
-            contextMenu.style.top = y + 'px';
-            contextMenu.style.display = 'block';
-        }
-
-
-        // Initialize
-        async function init() {
-            console.log('init() called');
-            try {
-                // Check for saved API key
-                const apiKeyResult = await invoke('get_api_key');
-                console.log('apiKeyResult:', apiKeyResult);
-
-                if (apiKeyResult) {
-                    // Load cached data
-                    const cachedData = await invoke('get_cached_data');
-                    console.log('cachedData:', cachedData);
-                    if (cachedData) {
-                        // If cachedData includes baseline metadata, show it in status
-                        const statusMsg = cachedData.status || 'From cache';
-                        if (cachedData.baseline) {
-                            const b = cachedData.baseline;
-                            updateUI(cachedData.data, `${statusMsg} (baseline ${b.amount} from ${b.start_iso})`);
-                        } else {
-                            updateUI(cachedData.data, statusMsg);
-                        }
-                        currentCost = cachedData.data;
-                    } else {
-                        // Fetch fresh data
-                        console.log('No cache, fetching fresh data');
-                        await fetchFreshData();
-                    }
-                    // Start auto-refresh after successful initialization
-                    startAutoRefresh();
-                    updateUI(currentCost, currentStatus);
-                } else {
-                    // Show setup UI
-                    console.log('No API key found');
-                    showSetupUI();
-                }
-            } catch (error) {
-                console.error('Init error:', error);
-                currentStatus = 'Error: ' + error;
-                updateUI(null, currentStatus);
-            }
-        }
-
-        function updateUI(cost, status) {
-            // If the status indicates a baseline response, label differently
-            // Treat both explicit 'With baseline' responses and cached messages that mention 'baseline'
-            const isBaseline = typeof status === 'string' && (status.includes('With baseline') || status.toLowerCase().includes('baseline'));
-
-            if (cost !== null) {
-                if (isBaseline) {
-                    costEl.textContent = `BLR: $${parseFloat(cost).toFixed(2)}`;
-                } else {
-                    costEl.textContent = `MTD: $${parseFloat(cost).toFixed(2)}`;
-                }
-            } else {
-                costEl.textContent = isBaseline ? 'BLR: --' : 'MTD: --';
-            }
-
-            // Add auto-refresh indicator to status
-            const autoRefreshIndicator = autoRefreshInterval ? ' (Auto: ON)' : '';
-            statusEl.textContent = `Status: ${status}${autoRefreshIndicator}`;
-            // Show full status text on hover (tooltip) so we can safely clamp/truncate the visible text
-            try { statusEl.title = `${status}${autoRefreshIndicator}`; } catch (e) { /* ignore if element missing */ }
-            currentStatus = status;
-        }
-
-
-        function startAutoRefresh() {
-            // Clear any existing interval
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-            }
-
-            // Set up auto-refresh every 3 minutes (180,000 ms)
-            autoRefreshInterval = setInterval(async () => {
-                console.log('Auto-refresh triggered');
-                await fetchFreshData();
-            }, 180000);
-        }
-
-        function stopAutoRefresh() {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
-            }
-        }
-
-        function showSetupUI() {
-            normalDisplay.style.display = 'none';
-            setupContainer.style.display = 'flex';
-            setupError.style.display = 'none';
-            setupSuccess.style.display = 'none';
-            apiKeyInput.value = '';
-            apiKeyInput.focus();
-        }
-
-        function showNormalUI() {
-            normalDisplay.style.display = 'flex';
-            setupContainer.style.display = 'none';
-        }
-
-        function showSetupError(message) {
-            setupError.textContent = message;
-            setupError.style.display = 'block';
-            setupSuccess.style.display = 'none';
-        }
-
-        function showSetupSuccess(message) {
-            setupSuccess.textContent = message;
-            setupSuccess.style.display = 'block';
-            setupError.style.display = 'none';
-        }
-
-        async function saveApiKey() {
-            const apiKey = apiKeyInput.value.trim();
-
-            if (!apiKey) {
-                showSetupError('Please enter an API key');
-                return;
-            }
-
-            saveApiBtn.disabled = true;
-            saveApiBtn.textContent = 'Validating...';
-
-            try {
-                // Validate the API key first
-                const validation = await invoke('validate_api_key', { apiKey });
-
-                if (validation.success) {
-                    // Save the API key
-                    await invoke('save_api_key_command', { apiKey });
-                    showSetupSuccess('API key saved successfully!');
-
-                    // Wait a moment then switch to normal UI
-                    setTimeout(async () => {
-                        showNormalUI();
-                        await init(); // Re-initialize with the new API key
-                    }, 1000);
-                } else {
-                    showSetupError('Invalid API key: ' + validation.error);
-                }
-            } catch (error) {
-                console.error('Save API key error:', error);
-                showSetupError('Error saving API key: ' + error);
-            } finally {
-                saveApiBtn.disabled = false;
-                saveApiBtn.textContent = 'Save & Start';
-            }
-        }
-
-        async function fetchFreshData() {
-            console.log('fetchFreshData called');
-            try {
-                currentStatus = 'Fetching...';
-                updateUI(currentCost, currentStatus);
-
-                const result = await invoke('fetch_month_to_date', { apiKey: await invoke('get_api_key') });
-                console.log('fetch_month_to_date result:', result);
-
-                if (result.success) {
-                    currentCost = result.data;
-                    // Use returned status if provided to determine labeling
-                    const respStatus = result.status || 'Fetched';
-                    currentStatus = respStatus;
-                    updateUI(result.data, respStatus);
-                } else {
-                    currentStatus = 'Failed: ' + result.error;
-                    updateUI(currentCost, currentStatus);
-                }
-            } catch (error) {
-                console.error('fetchFreshData error:', error);
-                currentStatus = 'Error: ' + error;
-                updateUI(currentCost, currentStatus);
-            }
-        }
-
-        // Event listeners
-        refreshBtn.addEventListener('click', () => {
-            fetchFreshData();
-        });
-
-        // Baseline UI handlers (modal)
         baselineToggleBtn.addEventListener('click', async () => {
-            // Prefer showing a native overlay window (more robust on Linux transparency/compositor)
+            // Pass active provider so baseline.html knows which commands to call
+            const providerParam = activeProvider === 'anthropic' ? '?provider=anthropic' : '';
             try {
                 const overlayX = Math.round(window.screenX);
                 const overlayY = Math.round(window.screenY);
                 if (!invoke) throw new Error('invoke unavailable');
+                // Set provider in app state before showing the modal so baseline.html can read it
+                await invoke('set_baseline_provider', { provider: activeProvider });
                 await invoke('show_baseline_modal', { x: overlayX, y: overlayY });
                 return;
             } catch (err) {
                 console.error('show_baseline_modal invoke failed', err);
-                // fallback to in-DOM modal below
             }
 
-            // Fallback: show the in-DOM modal if native overlay not available
+            // Fallback: in-DOM modal
             showBaselineModal();
             try {
-                const cached = await invoke('get_cached_data');
+                const cachedData = await invoke('get_cached_data');
+                const cached = getCachedForProvider(cachedData);
                 if (cached && cached.baseline && cached.baseline.amount) {
                     modalAmountInput.value = cached.baseline.amount;
-                    if (cached.baseline.start_iso) {
-                        modalDateInput.value = cached.baseline.start_iso.slice(0, 10);
-                    }
+                    if (cached.baseline.start_iso) modalDateInput.value = cached.baseline.start_iso.slice(0, 10);
                 } else {
                     modalAmountInput.value = '';
                     modalDateInput.value = new Date().toISOString().slice(0, 10);
@@ -668,7 +618,6 @@
             }
             modalError.style.display = 'none';
             modalSuccess.style.display = 'none';
-            // limit modal to the widget area so backdrop/panel don't enlarge the window
             const rect = widget.getBoundingClientRect();
             baselineModal.style.position = 'fixed';
             baselineModal.style.left = rect.left + 'px';
@@ -680,17 +629,10 @@
             modalAmountInput.select();
         });
 
-        // close handlers
-        modalBackdrop.addEventListener('click', () => {
-            hideBaselineModal();
-        });
-        modalCloseBtn.addEventListener('click', () => {
-            hideBaselineModal();
-        });
+        modalBackdrop.addEventListener('click', hideBaselineModal);
+        modalCloseBtn.addEventListener('click', hideBaselineModal);
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && baselineModal.style.display === 'flex') {
-                hideBaselineModal();
-            }
+            if (e.key === 'Escape' && baselineModal.style.display === 'flex') hideBaselineModal();
         });
 
         modalSaveBtn.addEventListener('click', async () => {
@@ -712,7 +654,8 @@
             modalSaveBtn.disabled = true;
             modalSaveBtn.textContent = 'Saving...';
             try {
-                await invoke('save_baseline_command', { amount, startIso });
+                const cmd = activeProvider === 'anthropic' ? 'save_anthropic_baseline_command' : 'save_baseline_command';
+                await invoke(cmd, { amount, startIso });
                 modalSuccess.textContent = 'Baseline saved';
                 modalSuccess.style.display = 'block';
                 await fetchFreshData();
@@ -730,7 +673,8 @@
             modalClearBtn.disabled = true;
             modalClearBtn.textContent = 'Clearing...';
             try {
-                await invoke('clear_baseline_command');
+                const cmd = activeProvider === 'anthropic' ? 'clear_anthropic_baseline_command' : 'clear_baseline_command';
+                await invoke(cmd);
                 modalSuccess.textContent = 'Baseline cleared';
                 modalSuccess.style.display = 'block';
                 await fetchFreshData();
@@ -744,134 +688,90 @@
             }
         });
 
-        // Setup UI event listeners
+        // ── Setup form events ─────────────────────────────────────────────────
         saveApiBtn.addEventListener('click', saveApiKey);
-        apiKeyForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            saveApiKey();
-        });
+        apiKeyForm.addEventListener('submit', (e) => { e.preventDefault(); saveApiKey(); });
 
-        // Drag functionality
-        const widget = document.querySelector('.widget');
-        console.log('Widget element found:', widget);
-        
-        if (widget) {
-            console.log('Adding contextmenu event listener to widget');
-            
-            // Add mousedown event listener for drag functionality
-            widget.addEventListener('mousedown', async (e) => {
-                // Don't drag if clicking on interactive elements
-                if (e.target.closest('button') || e.target.closest('input') || e.target.closest('#baseline-modal-panel')) {
-                    return;
-                }
-
-                // Prefer native window-manager drag (fixes jitter/lag on Linux)
-                if (appWindow && typeof appWindow.startDragging === 'function') {
-                    try {
-                        await appWindow.startDragging();
-                    } catch (err) {
-                        console.error('startDragging failed:', err);
-                    }
-                }
-
-                e.preventDefault();
-            });
-        }
-        
-        // Try attaching contextmenu listener to document instead
-        console.log('Adding contextmenu event listener to document');
-        document.addEventListener('contextmenu', async (e) => {
-            console.log('document contextmenu event fired! target:', e.target);
-            
-            // Only handle if clicking on our widget
-            if (!e.target.closest('.widget')) {
-                console.log('Click not on widget, ignoring');
-                return;
+        // ── Context menu ──────────────────────────────────────────────────────
+        export function hideContextMenu() {
+            if (contextMenu) {
+                contextMenu.style.display = 'none';
+                contextMenu.style.visibility = 'hidden';
+                contextMenu.style.pointerEvents = 'none';
             }
-            
-            console.log('contextmenu event fired on widget!');
+            forceWidgetRepaint();
+            if (window.forceFullWindowPaintNudge) window.forceFullWindowPaintNudge();
+            if (invoke) { try { invoke('hide_context_menu'); } catch (e) {} }
+        }
+        window.hideContextMenu = hideContextMenu;
+
+        function showContextMenu(x, y) {
+            if (!contextMenu) return;
+            contextMenu.style.visibility = 'visible';
+            contextMenu.style.pointerEvents = 'auto';
+            contextMenu.style.left = x + 'px';
+            contextMenu.style.top = y + 'px';
+            contextMenu.style.display = 'block';
+        }
+
+        document.addEventListener('contextmenu', async (e) => {
+            if (!e.target.closest('.widget')) return;
             e.preventDefault();
-            e.stopPropagation(); // Prevent Windows default menu
-            
-            // Position relative to widget/window
-            const x = e.clientX;
-            const y = e.clientY;
-
-            // Make sure menu doesn't go off screen (use same menu dims as overlay)
-            const menuWidth = 96;
-            const menuHeight = 64;
-            const screenWidth = window.innerWidth;
-            const screenHeight = window.innerHeight;
-            
-            const adjustedX = x + menuWidth > screenWidth ? screenWidth - menuWidth : x;
-            const adjustedY = y + menuHeight > screenHeight ? screenHeight - menuHeight : y;
-
-            // Convert to screen coordinates so the native overlay window can be positioned correctly
+            e.stopPropagation();
+            const x = e.clientX, y = e.clientY;
+            const menuWidth = 96, menuHeight = 64;
+            const adjustedX = x + menuWidth > window.innerWidth ? window.innerWidth - menuWidth : x;
+            const adjustedY = y + menuHeight > window.innerHeight ? window.innerHeight - menuHeight : y;
             const absoluteX = Math.round(window.screenX + adjustedX);
             const absoluteY = Math.round(window.screenY + adjustedY);
-
-            // Show native overlay via Tauri command
             try {
                 if (!invoke) throw new Error('invoke unavailable');
                 await invoke('show_context_menu', { x: absoluteX, y: absoluteY });
             } catch (err) {
-                // If Tauri is unavailable or the overlay window cannot be shown,
-                // fall back to the lightweight in-window HTML menu.
-                console.error('show_context_menu invoke failed, using fallback HTML menu', err);
                 showContextMenu(adjustedX, adjustedY);
             }
         });
 
-
-        // Close context menu when clicking elsewhere
         document.addEventListener('click', (e) => {
-            // Clicking anywhere in the main window should hide the native overlay,
-            // and also hide the in-window fallback menu if the click is outside it.
-            if (!contextMenu || !contextMenu.contains(e.target)) {
-                hideContextMenu();
-            }
+            if (!contextMenu || !contextMenu.contains(e.target)) hideContextMenu();
         });
 
-
-        // Close context menu on Escape key
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                hideContextMenu();
-            }
+            if (e.key === 'Escape') hideContextMenu();
         });
 
-        // Fallback menu: quit and cancel actions.
         if (closeAppBtn) {
             closeAppBtn.addEventListener('click', async () => {
-                try {
-                    if (!invoke) throw new Error('invoke unavailable');
-                    await invoke('quit_app');
-                } catch (err) {
-                    console.error('Failed to quit app from fallback menu:', err);
-                }
+                try { if (!invoke) throw new Error(); await invoke('quit_app'); } catch (err) {}
                 hideContextMenu();
             });
         }
-
         if (cancelMenuBtn) {
-            cancelMenuBtn.addEventListener('click', () => {
-                hideContextMenu();
+            cancelMenuBtn.addEventListener('click', () => hideContextMenu());
+        }
+
+        // ── Drag ──────────────────────────────────────────────────────────────
+        if (widget) {
+            widget.addEventListener('mousedown', async (e) => {
+                if (e.target.closest('button') || e.target.closest('input') || e.target.closest('#baseline-modal-panel')) return;
+                if (appWindow && typeof appWindow.startDragging === 'function') {
+                    try { await appWindow.startDragging(); } catch (err) {}
+                }
+                e.preventDefault();
             });
         }
 
+        // ── Init ──────────────────────────────────────────────────────────────
+        async function init() {
+            await loadProvider();
+            startAutoRefresh();
+        }
 
-        // Initialize app
-        console.log('Script loaded, calling init()');
+        refreshBtn.addEventListener('click', () => fetchFreshData());
 
-        // Ensure normal display is shown initially
-        showNormalUI();
+        window.addEventListener('beforeunload', stopAutoRefresh);
 
         init();
-
-        // Cleanup auto-refresh when page unloads
-        window.addEventListener('beforeunload', () => {
-            stopAutoRefresh();
-        });
     </script>
 </body>
 

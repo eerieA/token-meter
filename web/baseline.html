@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Baseline</title>
 <style>
-  /* Make the webview exactly the size of the dialog by centering the panel and removing any full-window backdrop */
   html, body {
     display: flex;
     margin: 0;
@@ -49,12 +48,13 @@
     font-size: 12px;
     cursor:pointer}
   .btn:disabled{opacity:0.6}
+  .provider-label{font-size:10px;color:#888;margin-left:4px}
 </style>
 </head>
 <body>
   <div class="panel" role="dialog" aria-modal="true">
     <div style="display:flex;justify-content:space-between;align-items:center">
-      <div style="font-weight:600">Set Baseline Credit</div>
+      <div style="font-weight:600">Set Baseline Credit <span id="provider-label" class="provider-label"></span></div>
       <button id="btn-cancel" style="background:transparent;border:none;font-size:16px;cursor:pointer">✕</button>
     </div>
     <div class="row">
@@ -71,6 +71,7 @@
   </div>
 <script>
   console.log('baseline overlay loaded');
+
   function getInvoke() {
     try {
       if (window.__TAURI__) {
@@ -81,7 +82,23 @@
     } catch (e) { console.warn('getInvoke failed', e); }
     return null;
   }
+
   const inv = getInvoke();
+
+  // Read active provider from app state set by index.html before showing this window
+  let provider = 'openai';
+  let saveCmd = 'save_baseline_command';
+  let clearCmd = 'clear_baseline_command';
+
+  async function initProvider() {
+    try {
+      provider = (await inv('get_baseline_provider')) || 'openai';
+    } catch (e) { provider = 'openai'; }
+    saveCmd = provider === 'anthropic' ? 'save_anthropic_baseline_command' : 'save_baseline_command';
+    clearCmd = provider === 'anthropic' ? 'clear_anthropic_baseline_command' : 'clear_baseline_command';
+    document.getElementById('provider-label').textContent = provider === 'anthropic' ? '(Anthropic)' : '(OpenAI)';
+  }
+
   const btnCancel = document.getElementById('btn-cancel');
   const btnSave = document.getElementById('btn-save');
   const btnClear = document.getElementById('btn-clear');
@@ -94,25 +111,34 @@
     try { return await inv(cmd, args); } catch (e) { console.error('invoke error', cmd, e); throw e; }
   }
 
-  // Prefill fields from cached data
-  (async () => {
+  // Called every time the window becomes visible (focus event covers show/re-show)
+  async function onShow() {
+    await initProvider();
     try {
-      const cached = await tryInvoke('get_cached_data');
+      const cachedData = await tryInvoke('get_cached_data');
+      const cached = cachedData
+        ? (provider === 'anthropic' ? cachedData.anthropic : cachedData.openai)
+        : null;
       if (cached && cached.baseline && cached.baseline.amount) {
         amountIn.value = cached.baseline.amount;
-        if (cached.baseline.start_iso) dateIn.value = cached.baseline.start_iso.slice(0,10);
+        if (cached.baseline.start_iso) dateIn.value = cached.baseline.start_iso.slice(0, 10);
       } else {
         amountIn.value = '';
-        dateIn.value = new Date().toISOString().slice(0,10);
+        dateIn.value = new Date().toISOString().slice(0, 10);
       }
     } catch (e) {
       amountIn.value = '';
-      dateIn.value = new Date().toISOString().slice(0,10);
+      dateIn.value = new Date().toISOString().slice(0, 10);
     }
-  })();
+    try { amountIn.focus(); amountIn.select(); } catch (e) {}
+  }
+
+  // Run on first load and on every subsequent focus (window shown again)
+  window.addEventListener('focus', onShow);
+  window.addEventListener('load', onShow);
 
   btnCancel.addEventListener('click', async () => {
-    try { await tryInvoke('hide_baseline_modal'); } catch (e) { /* ignore */ }
+    try { await tryInvoke('hide_baseline_modal'); } catch (e) {}
   });
 
   btnSave.addEventListener('click', async () => {
@@ -124,8 +150,7 @@
     btnSave.disabled = true; btnSave.textContent = 'Saving...';
     try {
       const startIso = `${date}T00:00:00Z`;
-      await tryInvoke('save_baseline_command', { amount, startIso });
-      // close overlay
+      await tryInvoke(saveCmd, { amount, startIso });
       await tryInvoke('hide_baseline_modal');
     } catch (e) {
       msg.textContent = 'Failed to save baseline: ' + e; msg.style.display = 'block';
@@ -135,9 +160,9 @@
   });
 
   btnClear.addEventListener('click', async () => {
-    btnClear.disabled = true; btnClear.textContent = 'Clearing...'; msg.style.display='none';
+    btnClear.disabled = true; btnClear.textContent = 'Clearing...'; msg.style.display = 'none';
     try {
-      await tryInvoke('clear_baseline_command');
+      await tryInvoke(clearCmd);
       await tryInvoke('hide_baseline_modal');
     } catch (e) {
       msg.textContent = 'Failed to clear baseline: ' + e; msg.style.display = 'block';
@@ -146,7 +171,6 @@
     }
   });
 
-  // click outside to dismiss (won't fire when overlay is sized to the panel)
   document.addEventListener('click', async (e) => {
     const panel = document.querySelector('.panel');
     if (!panel.contains(e.target)) {
@@ -155,13 +179,9 @@
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      try { inv && inv('hide_baseline_modal'); } catch (e) {}
-    }
+    if (e.key === 'Escape') { try { inv && inv('hide_baseline_modal'); } catch (e) {} }
   });
 
-  // Focus first field
-  window.addEventListener('load', () => { try { amountIn.focus(); amountIn.select(); window.focus(); } catch (e) {} });
 </script>
 </body>
 </html>
