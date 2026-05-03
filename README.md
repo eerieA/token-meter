@@ -30,14 +30,15 @@ This repo is a migration from previous Pyside6 stack.
 - Fetches month-to-date organization usage costs for the active provider
 - Baseline mode: optionally record a baseline credit amount and compute remaining credit since a start date — configured independently per provider
 - Local JSON cache to avoid too many API calls (cache considered stale after 3 minutes)
-- Per-provider inline key entry: if no API key is saved for the active provider, the widget shows `$--:--` and an inline "Add key" panel
+- Per-provider inline key entry: if no API key is saved for the active provider, the widget shows `$--:--` and an **inline** "Add key" panel
 - Retry & pagination logic for robust API requests
-- Uses rust_decimal for accurate monetary aggregation
+- Uses rust_decimal for monetary aggregation
 - API keys stored in the user's home directory (see Storage below)
 
 Windows version preview and Linux version preview (Ubuntu with GNOME X11).
 
-<img alt="token meter windows ver preview" src="https://live.staticflickr.com/65535/55102591518_ba15bab69b.jpg" width="320">
+<img alt="token meter windows ver preview" src="https://live.staticflickr.com/65535/55102591518_cc08397ddc.jpg" width="320">
+
 <img alt="token meter linux ver preview" src="https://live.staticflickr.com/65535/55106010788_80ddac54f0.jpg" width="320">
 
 > You can see there is ghosting problem on GNOME X11. But it may require significant effort to fix so probably not gonna get fixed.
@@ -117,7 +118,7 @@ Files created:
 | `anthropic_baseline_used` | Anthropic usage since baseline start |
 | `anthropic_baseline_remaining` | Anthropic baseline amount minus used |
 
-Baselines are independent per provider — you can set one, both, or neither.
+Baselines are independent per provider.
 
 ## Running / Building
 
@@ -144,11 +145,11 @@ cargo tauri dev
 ### Build for release
 
 ```bash
-# via npm
+% via npm
 npm run build
-# Bundles will be in src-tauri/target/release/bundle
+% Bundles will be in src-tauri/target/release/bundle
 
-# or with the Tauri CLI directly
+% or with the Tauri CLI directly
 cargo tauri build
 ```
 
@@ -197,4 +198,6 @@ If you run into environment issues on Linux (snap-related terminals, etc.), try 
 
 ## Limitations & Future work
 
-- UI/UX polishing, unit tests, packaging improvements and more robust config handling are future tasks
+- Unit tests
+- Some configurable UI options
+- Packaging improvements and more robust config handling
